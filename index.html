@@ -12,6 +12,7 @@
             <span id="lives" class="lives">❤️❤️❤️</span>
             <span id="level" class="level">第1关</span>
             <span id="timer" class="timer">01:00</span>
+            <button id="pauseBtn" class="pause-btn">⏸</button>
             <span id="score" class="score">0</span>
         </div>
 
@@ -25,7 +26,36 @@
             <div class="combo-wrap">
                 <span id="comboText" class="combo-text"></span>
             </div>
+            <div id="rushBar" class="rush-bar">
+                <div class="rush-pips">
+                    <span class="rush-pip" data-i="0"></span>
+                    <span class="rush-pip" data-i="1"></span>
+                    <span class="rush-pip" data-i="2"></span>
+                    <span class="rush-pip" data-i="3"></span>
+                </div>
+                <span id="rushLabel" class="rush-label"></span>
+            </div>
             <button id="flagBtn" class="flag-btn" title="切换标旗模式">⛏️</button>
+        </div>
+
+        <!-- 暂停遮罩 -->
+        <div id="pauseOverlay" class="pause-overlay">
+            <div class="pause-content">
+                <div class="pause-icon">⏸</div>
+                <div class="pause-label">已暂停</div>
+                <button id="resumeBtn" class="btn-primary">继续游戏</button>
+            </div>
+        </div>
+
+        <!-- 勇气奖励特效层 -->
+        <div id="courageOverlay" class="courage-overlay">
+            <div id="courageParticles" class="courage-particles"></div>
+            <div class="courage-content">
+                <div class="courage-dice" id="courageDice">🎲</div>
+                <div class="courage-title">勇 气 奖 励 !</div>
+                <div id="courageScore" class="courage-detail"></div>
+                <div class="courage-detail courage-time">⏰ 时间回满</div>
+            </div>
         </div>
 
         <div id="overlay" class="overlay">

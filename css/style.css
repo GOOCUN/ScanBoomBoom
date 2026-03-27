@@ -80,6 +80,36 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 .combo-text.hot { color: #3FB950; font-size: 16px; }
 .combo-text.fire { color: #F0C040; font-size: 18px; text-shadow: 0 0 8px rgba(240,192,64,.4); }
 
+/* ---- 速推进度条 ---- */
+.rush-bar {
+    display: flex; align-items: center; gap: 6px;
+    opacity: 0; transition: opacity .25s;
+}
+.rush-bar.active { opacity: 1; }
+.rush-pips {
+    display: flex; gap: 4px;
+}
+.rush-pip {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #30363D; border: 1.5px solid #484F58;
+    transition: background .15s, border-color .15s, transform .15s;
+}
+.rush-pip.filled {
+    background: #79C0FF; border-color: #79C0FF;
+    box-shadow: 0 0 6px rgba(121,192,255,.5);
+}
+.rush-pip.pulse {
+    animation: pip-pulse .6s ease infinite;
+}
+@keyframes pip-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.4); box-shadow: 0 0 10px rgba(121,192,255,.8); }
+}
+.rush-label {
+    font-size: 11px; color: #79C0FF; white-space: nowrap;
+    font-weight: 600;
+}
+
 /* ---- 飘分 ---- */
 #floats {
     position: fixed; inset: 0; pointer-events: none; z-index: 100;
@@ -129,3 +159,98 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     background: #21262D; color: #C9D1D9; border: 1px solid #30363D;
 }
 .btn-primary.hidden, .btn-secondary.hidden { display: none; }
+
+/* ---- 暂停按钮 ---- */
+.pause-btn {
+    background: none; border: none; color: #8B949E;
+    font-size: 18px; cursor: pointer; padding: 2px 6px;
+    transition: color .15s;
+}
+.pause-btn:hover { color: #C9D1D9; }
+
+/* ---- 暂停遮罩 ---- */
+.pause-overlay {
+    position: fixed; inset: 0; z-index: 250;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(13,17,23,.96); backdrop-filter: blur(16px);
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.pause-overlay.active { opacity: 1; pointer-events: auto; }
+.pause-content { text-align: center; }
+.pause-icon { font-size: 64px; margin-bottom: 12px; opacity: .6; }
+.pause-label { font-size: 22px; font-weight: 700; color: #C9D1D9; margin-bottom: 28px; }
+
+/* ---- 勇气奖励叠层 ---- */
+.courage-overlay {
+    position: fixed; inset: 0; z-index: 280;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(240,192,64,.25) 0%, rgba(13,17,23,.92) 70%);
+    backdrop-filter: blur(4px);
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.courage-overlay.active {
+    opacity: 1; pointer-events: auto;
+    animation: courage-flash .6s ease-out;
+}
+@keyframes courage-flash {
+    0% { background-color: rgba(255,215,0,.5); }
+    30% { background-color: rgba(255,215,0,.15); }
+    100% { background-color: transparent; }
+}
+.courage-particles {
+    position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+.courage-content { text-align: center; z-index: 1; position: relative; }
+.courage-dice {
+    font-size: 80px; line-height: 1;
+    animation: dice-bounce 0.8s ease infinite;
+}
+@keyframes dice-bounce {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.35) rotate(12deg); }
+    50% { transform: scale(1) rotate(0deg); }
+    75% { transform: scale(1.35) rotate(-12deg); }
+}
+.courage-title {
+    font-size: 32px; font-weight: 900; margin-top: 12px; letter-spacing: 6px;
+    background: linear-gradient(135deg, #FFD700, #FFA500, #FF6B35, #FFD700);
+    background-size: 200% 200%;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gold-shimmer 1.2s ease infinite;
+}
+@keyframes gold-shimmer {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+.courage-detail {
+    font-size: 20px; font-weight: 700; margin-top: 10px;
+    color: #FFD700; text-shadow: 0 0 12px rgba(255,215,0,.5);
+}
+.courage-time { color: #79C0FF; text-shadow: 0 0 12px rgba(121,192,255,.5); }
+
+/* ---- 碎纸屑粒子 ---- */
+.confetti {
+    position: absolute;
+    animation: confetti-fly 1.3s ease-out forwards;
+    pointer-events: none;
+}
+@keyframes confetti-fly {
+    0%   { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(720deg); }
+}
+
+/* ---- 大号飘分 ---- */
+.float-num.float-big {
+    font-size: 26px;
+    animation: float-up-big 1.2s ease-out forwards;
+    text-shadow: 0 2px 8px rgba(0,0,0,.8), 0 0 20px currentColor;
+}
+@keyframes float-up-big {
+    0%   { opacity: 1; transform: translateY(0) scale(0.5); }
+    20%  { opacity: 1; transform: translateY(-10px) scale(1.3); }
+    50%  { opacity: 1; transform: translateY(-36px) scale(1.1); }
+    100% { opacity: 0; transform: translateY(-70px) scale(.8); }
+}
+

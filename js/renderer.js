@@ -18,9 +18,17 @@ class Renderer {
         this.reveals = [];
         this.explosion = null;
         this.shakeEnd = 0;
+        this.shakeDur = 200;
+        this.shakeAmp = 6;
 
         // 胜利翻金动画
         this.victoryAnim = null; // { start, dur }
+
+        // 勇气奖励动画
+        this.courageAnim = null;
+
+        // 超时全屏红闪
+        this.timeoutFlash = null;
 
         // 桌面悬停
         this.hoverCell = null;
@@ -47,7 +55,11 @@ class Renderer {
         this.reveals = [];
         this.explosion = null;
         this.shakeEnd = 0;
+        this.shakeDur = 200;
+        this.shakeAmp = 6;
         this.victoryAnim = null;
+        this.courageAnim = null;
+        this.timeoutFlash = null;
         this.canvas.style.transform = '';
         this.resize();
     }
@@ -95,6 +107,8 @@ class Renderer {
     animateExplosion(x, y) {
         this.explosion = { x, y, start: performance.now(), dur: 300 };
         this.shakeEnd = performance.now() + 200;
+        this.shakeDur = 200;
+        this.shakeAmp = 6;
     }
 
     animateRevealMines(mines) {
@@ -103,8 +117,30 @@ class Renderer {
             this.reveals.push({ x: mines[i].x, y: mines[i].y, start: now, delay: i * 60, dur: 200 });
     }
 
+    /** 时间到：依次翻出所有雷 + 每颗雷爆炸 + 强震 */
+    animateTimeoutExplosion(mines) {
+        const now = performance.now();
+        // 快速依次翻出
+        for (let i = 0; i < mines.length; i++) {
+            this.reveals.push({ x: mines[i].x, y: mines[i].y, start: now, delay: i * 80, dur: 150 });
+        }
+        // 全部翻出后集体爆炸闪红 + 强震
+        const totalDelay = mines.length * 80 + 200;
+        this.timeoutFlash = { start: now + totalDelay, dur: 600 };
+        this.shakeEnd = now + totalDelay + 600;
+        this.shakeDur = 600;
+        this.shakeAmp = 14;
+    }
+
     animateVictory() {
         this.victoryAnim = { start: performance.now(), dur: 800 };
+    }
+
+    animateCourage() {
+        this.courageAnim = { start: performance.now(), dur: 2000 };
+        this.shakeEnd = performance.now() + 800;
+        this.shakeDur = 800;
+        this.shakeAmp = 12;
     }
 
     // ==================== 主绘制 ====================
@@ -116,11 +152,12 @@ class Renderer {
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.boardW, this.boardH);
 
-        // 震动
+        // 震动（衰减：从强到弱）
         if (now < this.shakeEnd) {
-            const decay = 1 - (1 - (this.shakeEnd - now) / 200);
-            const sx = Math.sin(now * 0.05) * 6 * (1 - decay);
-            const sy = Math.cos(now * 0.07) * 6 * (1 - decay);
+            const t = (this.shakeEnd - now) / this.shakeDur;
+            const amp = this.shakeAmp * t;
+            const sx = Math.sin(now * 0.05) * amp;
+            const sy = Math.cos(now * 0.07) * amp;
             this.canvas.style.transform = `translate(${sx}px,${sy}px)`;
         } else if (this.canvas.style.transform) {
             this.canvas.style.transform = '';
@@ -196,6 +233,36 @@ class Renderer {
                         ctx.restore();
                     } else if (t >= 1) this.explosion = null;
                 }
+            }
+        }
+
+        // 勇气奖励全屏金色脉冲
+        if (this.courageAnim) {
+            const t = (now - this.courageAnim.start) / this.courageAnim.dur;
+            if (t < 1) {
+                ctx.save();
+                const pulse = Math.sin(t * Math.PI * 6) * 0.25 + 0.15;
+                ctx.globalAlpha = pulse * (1 - t * t);
+                ctx.fillStyle = '#FFD700';
+                ctx.fillRect(0, 0, this.boardW, this.boardH);
+                ctx.restore();
+            } else {
+                this.courageAnim = null;
+            }
+        }
+
+        // 超时全屏红闪
+        if (this.timeoutFlash) {
+            const t = (now - this.timeoutFlash.start) / this.timeoutFlash.dur;
+            if (t >= 0 && t < 1) {
+                ctx.save();
+                const pulse = Math.sin(t * Math.PI * 3) * 0.35;
+                ctx.globalAlpha = Math.max(0, pulse * (1 - t));
+                ctx.fillStyle = '#F85149';
+                ctx.fillRect(0, 0, this.boardW, this.boardH);
+                ctx.restore();
+            } else if (t >= 1) {
+                this.timeoutFlash = null;
             }
         }
     }

@@ -241,6 +241,79 @@ class Board {
         return (results.reveals.length > 0 || results.mines.length > 0) ? results : null;
     }
 
+    /** 检查当前局面是否存在可通过逻辑推导确定的安全格（完整模拟求解） */
+    hasSafeMove() {
+        const w = this.width, h = this.height, total = w * h;
+        const idx = (x, y) => y * w + x;
+        const isMine = i => this.cells[i].mine;
+        const state = new Uint8Array(total); // 0=unknown, 1=revealed, 2=flagged
+        for (let i = 0; i < total; i++) {
+            const c = this.cells[i];
+            if (c.revealed) state[i] = 1;
+            else if (c.flagged) state[i] = 2;
+        }
+
+        let foundSafe = false;
+        const revealQueue = [];
+
+        const revealCell = (i) => {
+            if (state[i] !== 0 || isMine(i)) return;
+            state[i] = 1;
+            foundSafe = true;
+            if (this.cells[i].adj === 0) {
+                const x = i % w, y = (i / w) | 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (!dx && !dy) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                            const ni = idx(nx, ny);
+                            if (state[ni] === 0) revealQueue.push(ni);
+                        }
+                    }
+                }
+            }
+        };
+
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let i = 0; i < total; i++) {
+                if (state[i] !== 1) continue;
+                const c = this.cells[i];
+                if (c.adj <= 0) continue;
+                const x = i % w, y = (i / w) | 0;
+                let unknowns = [], flags = 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (!dx && !dy) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+                        const ni = idx(nx, ny);
+                        if (state[ni] === 0) unknowns.push(ni);
+                        else if (state[ni] === 2) flags++;
+                    }
+                }
+                if (unknowns.length === 0) continue;
+                // 规则1：剩余雷数 == 未知数 → 全是雷
+                if (c.adj - flags === unknowns.length) {
+                    for (const ni of unknowns) {
+                        if (state[ni] === 0) { state[ni] = 2; changed = true; }
+                    }
+                }
+                // 规则2：已标够雷 → 未知格全安全 → 模拟翻开 + BFS连锁
+                if (c.adj === flags && unknowns.length > 0) {
+                    for (const ni of unknowns) revealQueue.push(ni);
+                    while (revealQueue.length > 0) {
+                        revealCell(revealQueue.shift());
+                        changed = true;
+                    }
+                }
+            }
+        }
+        return foundSafe;
+    }
+
     revealMines() {
         const mines = [];
         for (const c of this.cells) {
