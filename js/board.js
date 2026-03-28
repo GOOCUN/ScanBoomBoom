@@ -21,6 +21,8 @@ class Board {
         this.generated = false;
         this.revealedSafe = 0;
         this.totalSafe = width * height - mineCount;
+        this.forceUnsolvable = false;
+        this.blueMineRatio = 0;
         this._initCells();
     }
 
@@ -30,7 +32,7 @@ class Board {
             this.cells[i] = {
                 x: i % this.width,
                 y: (i / this.width) | 0,
-                mine: false, adj: 0,
+                mine: false, blue: false, adj: 0,
                 revealed: false, flagged: false,
             };
         }
@@ -41,7 +43,7 @@ class Board {
         return this.cells[y * this.width + x];
     }
 
-    /** 首次点击后生成棋盘（保证有解） */
+    /** 首次点击后生成棋盘 */
     generate(safeX, safeY) {
         const MAX_ATTEMPTS = 50;
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -49,14 +51,29 @@ class Board {
             this.revealedSafe = 0;
             this._placeMines(safeX, safeY, this.seed + attempt);
             this._calcAdjacent();
-            if (this._isSolvable(safeX, safeY)) {
+            const solvable = this._isSolvable(safeX, safeY);
+            // forceUnsolvable: 赌徒模式要求必须有死棋
+            if (this.forceUnsolvable ? !solvable : solvable) {
                 this.generated = true;
-                this.seed = this.seed + attempt; // 记录实际使用的种子
+                this.seed = this.seed + attempt;
+                // 分配蓝雷
+                if (this.blueMineRatio > 0) this._assignBlueMines();
                 return;
             }
         }
-        // 兜底：使用最后一次生成（极罕见）
         this.generated = true;
+        if (this.blueMineRatio > 0) this._assignBlueMines();
+    }
+
+    _assignBlueMines() {
+        const mines = this.cells.filter(c => c.mine);
+        const blueCount = Math.max(1, Math.round(mines.length * this.blueMineRatio));
+        // Fisher-Yates shuffle
+        for (let i = mines.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [mines[i], mines[j]] = [mines[j], mines[i]];
+        }
+        for (let i = 0; i < blueCount; i++) mines[i].blue = true;
     }
 
     _placeMines(safeX, safeY, seed) {
@@ -246,10 +263,10 @@ class Board {
         const w = this.width, h = this.height, total = w * h;
         const idx = (x, y) => y * w + x;
         const isMine = i => this.cells[i].mine;
-        const state = new Uint8Array(total); // 0=unknown, 1=revealed, 2=flagged
+        const state = new Uint8Array(total); // 0=unknown, 1=revealed, 2=flagged/revealed-mine
         for (let i = 0; i < total; i++) {
             const c = this.cells[i];
-            if (c.revealed) state[i] = 1;
+            if (c.revealed) state[i] = c.mine ? 2 : 1; // 已翻开的雷视为已知雷（等同flagged）
             else if (c.flagged) state[i] = 2;
         }
 

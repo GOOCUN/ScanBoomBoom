@@ -254,3 +254,61 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     100% { opacity: 0; transform: translateY(-70px) scale(.8); }
 }
 
+/* ---- 修饰器选择叠层 ---- */
+.modifier-overlay {
+    position: fixed; inset: 0; z-index: 260;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(13,17,23,.96); backdrop-filter: blur(12px);
+    opacity: 0; pointer-events: none; transition: opacity .3s;
+}
+.modifier-overlay.active { opacity: 1; pointer-events: auto; }
+.modifier-content { text-align: center; width: 90%; max-width: 380px; }
+.modifier-level {
+    font-size: 13px; color: #58A6FF; font-weight: 600; margin-bottom: 4px;
+}
+.modifier-title {
+    font-size: 22px; font-weight: 800; color: #C9D1D9; margin-bottom: 4px;
+}
+.modifier-subtitle {
+    font-size: 12px; color: #6E7681; margin-bottom: 16px;
+}
+.modifier-list {
+    display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;
+}
+.modifier-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 12px;
+    background: #161B22; border: 2px solid #30363D;
+    cursor: pointer; transition: all .15s; text-align: left;
+}
+.modifier-card:active { transform: scale(.97); }
+.modifier-card.selected {
+    border-color: #F0C040; background: #1C1A10;
+    box-shadow: 0 0 12px rgba(240,192,64,.15);
+}
+.modifier-card .mod-icon { font-size: 28px; flex-shrink: 0; }
+.modifier-card .mod-info { flex: 1; }
+.modifier-card .mod-name {
+    font-size: 15px; font-weight: 700; color: #C9D1D9;
+}
+.modifier-card .mod-desc {
+    font-size: 12px; color: #8B949E; margin-top: 2px;
+}
+.modifier-card .mod-mult {
+    font-size: 14px; font-weight: 800; color: #F0C040; flex-shrink: 0;
+}
+.modifier-mult {
+    font-size: 16px; color: #8B949E; margin-bottom: 16px;
+}
+.modifier-mult span {
+    font-weight: 800; font-size: 22px; color: #F0C040;
+    transition: transform .15s;
+    display: inline-block;
+}
+.btn-skip {
+    display: block; margin: 10px auto 0; padding: 8px 20px;
+    background: none; border: none; color: #484F58;
+    font-size: 13px; cursor: pointer; transition: color .15s;
+}
+.btn-skip:hover { color: #8B949E; }
+

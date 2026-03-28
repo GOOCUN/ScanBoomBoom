@@ -27,6 +27,21 @@ const RUSH_TIERS = [
     { steps: 6, window: 6, bonus: 5, label: '极速!!' },
 ];
 
+// ==================== 修饰器定义 ====================
+const MODIFIERS = {
+    allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 2.0 },
+    rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短30%',           mult: 1.5 },
+    noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.5 },
+    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.8 },
+};
+
+// 蓝雷比例（按关卡）
+function getBlueMineRatio(level) {
+    if (level < 6) return 0;
+    if (level <= 10) return 0.3;
+    return 0.5;
+}
+
 // ==================== 存档 ====================
 const STORAGE_KEY = 'neuromines_records';
 function loadRecords() {
@@ -87,6 +102,12 @@ class Game {
         // 速推系统
         this.rushClicks = []; // timestamps of consecutive safe clicks
 
+        // 修饰器系统
+        this.activeMods = new Set(); // 当前激活的修饰器 key
+        this.scoreMult = 1;          // 总得分倍率
+        this.hitMines = 0;           // 本关踩雷次数（无伤通关检测）
+        this.noDmgBonus = 0;         // 无伤通关加分
+
         // UI 引用
         this.el = {
             lives:          document.getElementById('lives'),
@@ -112,12 +133,18 @@ class Game {
             record:         document.getElementById('overlayRecord'),
             nextBtn:        document.getElementById('nextBtn'),
             restart:        document.getElementById('restartBtn'),
+            modOverlay:     document.getElementById('modifierOverlay'),
+            modList:        document.getElementById('modifierList'),
+            modMult:        document.getElementById('modifierMult'),
+            modLevel:       document.getElementById('modifierLevel'),
+            modStartBtn:    document.getElementById('modifierStartBtn'),
+            modSkipBtn:     document.getElementById('modifierSkipBtn'),
         };
 
         this.audioCtx = null;
 
         this._setupInput();
-        this._startLevel();
+        this._showModifierSelection();
         this._loop();
     }
 
@@ -202,7 +229,7 @@ class Game {
         this.el.nextBtn.addEventListener('click', () => {
             this.el.overlay.classList.remove('active');
             this.level++;
-            this._startLevel();
+            this._showModifierSelection();
         });
 
         this.el.restart.addEventListener('click', () => {
@@ -212,9 +239,75 @@ class Game {
             this.lives = this.MAX_LIVES;
             this.combo = 0;
             this.courageCnt = 0;
-            this._startLevel();
+            this._showModifierSelection();
         });
 
+        // 修饰器选择
+        this.el.modStartBtn.addEventListener('click', () => this._confirmModifiers());
+        this.el.modSkipBtn.addEventListener('click', () => {
+            this.activeMods.clear();
+            this._confirmModifiers();
+        });
+
+    }
+
+    // ==================== 修饰器选择 ====================
+
+    _showModifierSelection() {
+        this.activeMods.clear();
+        this.scoreMult = 1;
+        this.el.modLevel.textContent = `第${this.level}关`;
+        this.el.modMult.textContent = '×1.0';
+
+        // 随机选3个修饰器展示
+        const keys = Object.keys(MODIFIERS);
+        for (let i = keys.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [keys[i], keys[j]] = [keys[j], keys[i]];
+        }
+        const shown = keys.slice(0, 3);
+
+        this.el.modList.innerHTML = '';
+        for (const key of shown) {
+            const m = MODIFIERS[key];
+            const card = document.createElement('div');
+            card.className = 'modifier-card';
+            card.dataset.mod = key;
+            card.innerHTML = `
+                <span class="mod-icon">${m.icon}</span>
+                <div class="mod-info">
+                    <div class="mod-name">${m.name}</div>
+                    <div class="mod-desc">${m.desc}</div>
+                </div>
+                <span class="mod-mult">×${m.mult}</span>`;
+            card.addEventListener('click', () => {
+                card.classList.toggle('selected');
+                if (card.classList.contains('selected')) {
+                    this.activeMods.add(key);
+                } else {
+                    this.activeMods.delete(key);
+                }
+                this._updateModMult();
+            });
+            this.el.modList.appendChild(card);
+        }
+
+        this.el.modOverlay.classList.add('active');
+    }
+
+    _updateModMult() {
+        let mult = 1;
+        for (const key of this.activeMods) {
+            mult *= MODIFIERS[key].mult;
+        }
+        this.scoreMult = mult;
+        this.el.modMult.textContent = `×${mult.toFixed(1)}`;
+    }
+
+    _confirmModifiers() {
+        this._updateModMult();
+        this.el.modOverlay.classList.remove('active');
+        this._startLevel();
     }
 
     // ==================== 暂停 ====================
@@ -238,19 +331,43 @@ class Game {
         const cfg = getLevelConfig(this.level);
         const seed = Date.now() ^ ((Math.random() * 0xFFFFFFFF) | 0);
         this.board = new Board(cfg.w, cfg.h, cfg.mines, seed);
+
+        // 蓝雷
+        this.board.blueMineRatio = getBlueMineRatio(this.level);
+
+        // 修饰器: 赌徒 → 强制死棋
+        if (this.activeMods.has('gambler')) this.board.forceUnsolvable = true;
+
         this.renderer.setBoard(this.board);
 
-        this.time = cfg.time;
-        this.maxTime = cfg.time;
+        // 修饰器: 争分夺秒 → 时间-30%
+        let timeBase = cfg.time;
+        if (this.activeMods.has('rush')) timeBase = Math.round(timeBase * 0.7);
+        this.time = timeBase;
+        this.maxTime = timeBase;
+
+        // 修饰器: 孤注一掷 → 生命=1
+        if (this.activeMods.has('allIn')) this.lives = 1;
+
         this.state = 'idle';
         this.lastTick = 0;
         this.levelScore = 0;
+        this.hitMines = 0;
 
         // 重置标旗模式
         this.flagMode = false;
         this.el.flagBtn.textContent = '⛏️';
         this.el.flagBtn.classList.remove('active');
         this.renderer.flagMode = false;
+
+        // 修饰器: 盲扫 → 禁用标旗按钮
+        if (this.activeMods.has('noFlag')) {
+            this.el.flagBtn.disabled = true;
+            this.el.flagBtn.style.opacity = '0.3';
+        } else {
+            this.el.flagBtn.disabled = false;
+            this.el.flagBtn.style.opacity = '';
+        }
 
         // 重置暂停按钮
         this.el.pauseBtn.textContent = '⏸';
@@ -261,7 +378,8 @@ class Game {
         this._uiRush();
 
         this._uiAll();
-        this.el.hint.textContent = `第${this.level}关 · 点击开始`;
+        const modHint = this.scoreMult > 1 ? ` · ×${this.scoreMult.toFixed(1)}` : '';
+        this.el.hint.textContent = `第${this.level}关${modHint} · 点击开始`;
         this.el.hint.classList.remove('hidden');
         this.el.overlay.classList.remove('active');
     }
@@ -290,6 +408,7 @@ class Game {
 
     _doFlag(pos) {
         if (this.state !== 'playing' && this.state !== 'idle') return;
+        if (this.activeMods.has('noFlag')) return; // 盲扫模式禁止标旗
         if (this.state === 'idle') {
             this.state = 'playing';
             this.lastTick = performance.now();
@@ -315,7 +434,10 @@ class Game {
         }
 
         // ===== 勇气奖励检测（翻开前检查） =====
-        const isDeadBoard = this.board.generated && !this.board.hasSafeMove();
+        // 条件：死棋 + 已翻开安全格 ≥ 75% 总安全格（避免开局就触发）
+        const progress = this.board.revealedSafe / this.board.totalSafe;
+        const isDeadBoard = this.board.generated && progress >= 0.75
+            && !this.board.hasSafeMove();
 
         const result = this.board.reveal(pos.x, pos.y);
         if (!result) return;
@@ -334,31 +456,57 @@ class Game {
         const result = this.board.chord(pos.x, pos.y);
         if (!result) return;
         if (result.reveals.length > 0) this._onSafeReveal(result.reveals);
-        for (const m of result.mines) this._onMine(m);
+        for (const m of result.mines) {
+            if (this.state !== 'playing') break; // 前一颗雷已结束游戏
+            this._onMine(m);
+        }
     }
 
     // ==================== 踩雷 ====================
 
     _onMine(result) {
-        this.lives--;
+        if (this.state !== 'playing') return; // 防止chord多雷重复触发
+        this.hitMines++;
         this.combo = 0;
         this.rushClicks = [];
         this._uiRush();
-        const penalty = 50;
-        this.totalScore = Math.max(0, this.totalScore - penalty);
 
-        this._uiLives();
-        this._uiScore();
-        this._uiCombo();
+        const cell = this.board.cell(result.x, result.y);
+        const isBlue = cell && cell.blue;
 
         this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
-        this.renderer.animateExplosion(result.x, result.y);
-        this._playSound('boom');
 
-        const { px, py } = this._boardToFloat(result.x, result.y);
-        this.floats.spawn(`-${penalty}`, px, py, '#F85149');
+        if (isBlue) {
+            // 蓝雷：扣 1/3 剩余时间，不扣命
+            const timeLoss = Math.ceil(this.time / 3);
+            this.time = Math.max(0, this.time - timeLoss);
+            this._uiTimer();
+            this._uiCombo();
 
-        if (this.lives <= 0) this._endGame('dead');
+            this.renderer.animateExplosion(result.x, result.y, '#58A6FF');
+            this._playSound('blueMine');
+
+            const { px, py } = this._boardToFloat(result.x, result.y);
+            this.floats.spawn(`⏱️-${timeLoss}s`, px, py, '#58A6FF');
+
+            if (this.time <= 0) this._endGame('time');
+        } else {
+            // 红雷：扣命
+            this.lives--;
+            const penalty = 50;
+            this.totalScore = Math.max(0, this.totalScore - penalty);
+            this._uiLives();
+            this._uiScore();
+            this._uiCombo();
+
+            this.renderer.animateExplosion(result.x, result.y);
+            this._playSound('boom');
+
+            const { px, py } = this._boardToFloat(result.x, result.y);
+            this.floats.spawn(`-${penalty}`, px, py, '#F85149');
+
+            if (this.lives <= 0) this._endGame('dead');
+        }
     }
 
     // ==================== 安全翻开 ====================
@@ -367,7 +515,8 @@ class Game {
         const n = cells.length;
         this.combo += n;
         const mult = this.combo >= 10 ? 3 : this.combo >= 5 ? 2 : 1;
-        const points = (n * 10 + Math.max(0, n - 1) * 5) * mult;
+        const basePoints = (n * 10 + Math.max(0, n - 1) * 5) * mult;
+        const points = Math.round(basePoints * this.scoreMult);
         this.levelScore += points;
         this.totalScore += points;
 
@@ -396,12 +545,29 @@ class Game {
         this._rushTick(px, py);
 
         if (this.board.isComplete()) {
-            const tBonus = Math.ceil(this.time) * 10;
-            this.totalScore += tBonus;
-            this.levelScore += tBonus;
-            this._uiScore();
+            this._applyWinBonus();
             this._endGame('win');
         }
+    }
+
+    // ==================== 胜利加分 ====================
+
+    _applyWinBonus() {
+        const tBonus = Math.round(Math.ceil(this.time) * 10 * this.scoreMult);
+        this.totalScore += tBonus;
+        this.levelScore += tBonus;
+
+        // 无伤通关加成：本关得分 +20%
+        if (this.hitMines === 0) {
+            const noDmgBonus = Math.round(this.levelScore * 0.2);
+            this.totalScore += noDmgBonus;
+            this.levelScore += noDmgBonus;
+            this.noDmgBonus = noDmgBonus;
+        } else {
+            this.noDmgBonus = 0;
+        }
+
+        this._uiScore();
     }
 
     // ==================== 勇气奖励 ====================
@@ -456,10 +622,7 @@ class Game {
 
             // 检查是否通关
             if (this.board.isComplete()) {
-                const tBonus = Math.ceil(this.time) * 10;
-                this.totalScore += tBonus;
-                this.levelScore += tBonus;
-                this._uiScore();
+                this._applyWinBonus();
                 this._endGame('win');
             }
         }, 2500);
@@ -504,6 +667,7 @@ class Game {
     // ==================== 结算 ====================
 
     _endGame(reason) {
+        if (this.state === 'ended') return; // 防止重复调用
         this.state = 'ended';
         const isWin = reason === 'win';
 
@@ -535,7 +699,13 @@ class Game {
         setTimeout(() => {
             if (isWin) {
                 this.el.title.textContent = '🎉 通关！';
-                this.el.msg.textContent = `第${this.level}关完成 · 时间奖励 +${Math.ceil(this.time) * 10} · 回复1❤️`;
+                const parts = [`第${this.level}关完成`];
+                const tBonus = Math.round(Math.ceil(this.time) * 10 * this.scoreMult);
+                parts.push(`时间 +${tBonus}`);
+                if (this.noDmgBonus > 0) parts.push(`🛡️无伤 +${this.noDmgBonus}`);
+                if (this.scoreMult > 1) parts.push(`倍率 ×${this.scoreMult.toFixed(1)}`);
+                parts.push('回复1❤️');
+                this.el.msg.textContent = parts.join(' · ');
                 this.el.nextBtn.classList.remove('hidden');
                 this.el.restart.textContent = '重新开始';
             } else {
@@ -687,6 +857,25 @@ class Game {
             g.gain.setValueAtTime(0.15, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
             osc.start(t); osc.stop(t + 0.35);
+        } else if (type === 'blueMine') {
+            // 蓝雷：下降水滴音 + 时钟倒转感
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, t);
+            osc.frequency.exponentialRampToValueAtTime(200, t + 0.3);
+            g.gain.setValueAtTime(0.12, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+            osc.start(t); osc.stop(t + 0.4);
+            // 嘀嗒音
+            [0.1, 0.2].forEach(d => {
+                const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+                o2.connect(g2); g2.connect(ctx.destination);
+                o2.type = 'triangle'; o2.frequency.value = 1200;
+                g2.gain.setValueAtTime(0.06, t + d);
+                g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.05);
+                o2.start(t + d); o2.stop(t + d + 0.08);
+            });
         } else if (type === 'win') {
             [523, 659, 784, 1047].forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();

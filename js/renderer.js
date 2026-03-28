@@ -104,8 +104,8 @@ class Renderer {
             this.reveals.push({ x, y, start: now, delay: dist * 40, dur: 200 });
     }
 
-    animateExplosion(x, y) {
-        this.explosion = { x, y, start: performance.now(), dur: 300 };
+    animateExplosion(x, y, color) {
+        this.explosion = { x, y, start: performance.now(), dur: 300, color: color || this.C.mine };
         this.shakeEnd = performance.now() + 200;
         this.shakeDur = 200;
         this.shakeAmp = 6;
@@ -227,7 +227,7 @@ class Renderer {
                     if (t >= 0 && t < 1) {
                         ctx.save();
                         ctx.globalAlpha = 0.7 * (1 - t);
-                        ctx.fillStyle = this.C.mine;
+                        ctx.fillStyle = this.explosion.color || this.C.mine;
                         this._roundRect(ctx, px - 2, py - 2, this.cellSize + 4, this.cellSize + 4, 6);
                         ctx.fill();
                         ctx.restore();
@@ -300,7 +300,7 @@ class Renderer {
 
         const cx = px + this.cellSize / 2, cy = py + this.cellSize / 2;
         if (cell.mine) {
-            ctx.fillStyle = this.C.mine;
+            ctx.fillStyle = cell.blue ? '#58A6FF' : this.C.mine;
             ctx.beginPath();
             ctx.arc(cx, cy, this.cellSize * 0.22, 0, Math.PI * 2);
             ctx.fill();
