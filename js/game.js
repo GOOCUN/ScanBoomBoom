@@ -33,10 +33,11 @@ function getRushTiers(level) {
 
 // ==================== 修饰器定义 ====================
 const MODIFIERS = {
-    allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 2.0 },
-    rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短30%',           mult: 1.5 },
-    noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.5 },
-    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.8 },
+    chill:   { icon: '�', name: '老太踱步', desc: '时间+100%，得分-30%',        mult: 0.7, always: true },
+    allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 1.6 },
+    rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短20%',           mult: 1.3 },
+    noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.3 },
+    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.5 },
 };
 
 // 蓝雷比例（按关卡）
@@ -371,9 +372,12 @@ class Game {
 
         this.renderer.setBoard(this.board);
 
-        // 修饰器: 争分夺秒 → 时间-30%
+        // 修饰器: 优柔寡断 → 时间+100%
         let timeBase = BASE_TIME;
-        if (this.activeMods.has('rush')) timeBase = Math.round(timeBase * 0.7);
+        if (this.activeMods.has('chill')) timeBase = timeBase * 2;
+
+        // 修饰器: 争分夺秒 → 时间-20%
+        if (this.activeMods.has('rush')) timeBase = Math.round(timeBase * 0.8);
         this.time = timeBase;
         this.maxTime = timeBase;
 
@@ -581,13 +585,13 @@ class Game {
     // ==================== 胜利加分 ====================
 
     _applyWinBonus() {
-        const tBonus = Math.round(Math.ceil(this.time) * 10 * this.scoreMult);
+        const tBonus = Math.round(Math.ceil(this.time) * 5 * this.scoreMult);
         this.totalScore += tBonus;
         this.levelScore += tBonus;
 
-        // 无伤通关加成：本关得分 +20%
+        // 无伤通关加成：本关得分 +10%
         if (this.hitMines === 0) {
-            const noDmgBonus = Math.round(this.levelScore * 0.2);
+            const noDmgBonus = Math.round(this.levelScore * 0.1);
             this.totalScore += noDmgBonus;
             this.levelScore += noDmgBonus;
             this.noDmgBonus = noDmgBonus;
@@ -607,8 +611,8 @@ class Game {
 
         const progress = this.board.revealedSafe / this.board.totalSafe;
 
-        // 分数奖励：总分 × 进度
-        const bonusPoints = Math.round(this.totalScore * progress);
+        // 分数奖励：本关分 × 进度
+        const bonusPoints = Math.round(this.levelScore * progress);
         this.totalScore += bonusPoints;
         this.levelScore += bonusPoints;
 
@@ -621,7 +625,7 @@ class Game {
                 this._uiLives();
                 survivalMsg = '❤️ +1生命';
             } else {
-                const extraPoints = Math.round(this.levelScore * 0.5);
+                const extraPoints = Math.round(this.levelScore * 0.25);
                 this.totalScore += extraPoints;
                 this.levelScore += extraPoints;
                 survivalMsg = `💰 +${extraPoints}分`;
