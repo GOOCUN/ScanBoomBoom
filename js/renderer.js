@@ -136,11 +136,15 @@ class Renderer {
         this.victoryAnim = { start: performance.now(), dur: 800 };
     }
 
-    animateCourage() {
-        this.courageAnim = { start: performance.now(), dur: 2000 };
-        this.shakeEnd = performance.now() + 800;
-        this.shakeDur = 800;
-        this.shakeAmp = 12;
+    animateCourage(intensity) {
+        // intensity: 0 = light (no anim), 1 = medium, 2 = strong
+        intensity = intensity || 1;
+        const dur = intensity >= 2 ? 2000 : 1200;
+        const amp = intensity >= 2 ? 16 : 8;
+        this.courageAnim = { start: performance.now(), dur };
+        this.shakeEnd = performance.now() + Math.min(dur, 800);
+        this.shakeDur = Math.min(dur, 800);
+        this.shakeAmp = amp;
     }
 
     // ==================== 主绘制 ====================

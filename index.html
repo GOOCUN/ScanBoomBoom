@@ -14,6 +14,7 @@
             <span id="timer" class="timer">01:00</span>
             <button id="pauseBtn" class="pause-btn">⏸</button>
             <span id="score" class="score">0</span>
+            <button id="aboutBtn" class="about-btn">ℹ️</button>
         </div>
 
         <div class="board-wrap">
@@ -52,9 +53,9 @@
             <div id="courageParticles" class="courage-particles"></div>
             <div class="courage-content">
                 <div class="courage-dice" id="courageDice">🎲</div>
-                <div class="courage-title">勇 气 奖 励 !</div>
+                <div class="courage-title" id="courageTitle">勇 气 奖 励 !</div>
                 <div id="courageScore" class="courage-detail"></div>
-                <div class="courage-detail courage-time">⏰ 时间回满</div>
+                <div id="courageTime" class="courage-detail courage-time"></div>
             </div>
         </div>
 
@@ -85,6 +86,59 @@
             </div>
         </div>
     </div>
+
+        <!-- 关于游戏叠层 -->
+        <div id="aboutOverlay" class="about-overlay">
+            <div class="about-content">
+                <div class="about-header">
+                    <span class="about-title">🧠 Neuro Mines</span>
+                    <button id="aboutCloseBtn" class="about-close">✖</button>
+                </div>
+                <div class="about-body">
+                    <section>
+                        <h3>🎮 基本规则</h3>
+                        <p>翻开所有安全格子即可过关。数字表示周围 8 格内的地雷数量。</p>
+                        <p>❤️ 生命值上限 3，踩到红雷扣 1 命，归零则游戏结束。</p>
+                    </section>
+                    <section>
+                        <h3>💣 蓝雷（第 6 关起）</h3>
+                        <p>蓝雷不扣命，但扣除剩余时间。关卡越高处罚越重：</p>
+                        <ul>
+                            <li>L6–10：扣 1/4 时间</li>
+                            <li>L11–17：扣 1/3 时间</li>
+                            <li>L18+：扣 1/2 时间</li>
+                        </ul>
+                    </section>
+                    <section>
+                        <h3>🎲 勇气奖励</h3>
+                        <p>当所有可推理安全格已翻开、无法继续时，任意翻开一格将触发勇气奖励：</p>
+                        <ul>
+                            <li>分数加成 = 总分 × 当前进度</li>
+                            <li>进度 ≥ 60%：+1 生命（满血则变总分 +50%）</li>
+                            <li>进度 < 60%：回复时间 = 上限 × 进度</li>
+                        </ul>
+                    </section>
+                    <section>
+                        <h3>⚡ 速推 & Combo</h3>
+                        <p>快速连续翻开格子可触发速推奖励时间；连续翻开累计 Combo，×2/×3 倍率加分。</p>
+                    </section>
+                    <section>
+                        <h3>🎭 修饰器</h3>
+                        <ul>
+                            <li>💥 孤注一掷：生命 =1，×2.0</li>
+                            <li>⏱️ 争分夺秒：时间 -30%，×1.5</li>
+                            <li>🚫 裸奔模式：禁止插旗，×1.5</li>
+                            <li>🎲 赌徒之心：随机死局，×1.8</li>
+                        </ul>
+                    </section>
+                    <section>
+                        <h3>📈 关卡进阶</h3>
+                        <p>L1–3: 6×6，L4–7: 6×6 加雷，L8–12: 7×7，L13–17: 7×7 高密度，L18+: 8×8。</p>
+                        <p>所有关卡统一 60 秒，难度通过棋盘大小、雷密度和蓝雷惩罚提升。</p>
+                    </section>
+                </div>
+            </div>
+        </div>
 
     <script src="js/board.js"></script>
     <script src="js/renderer.js"></script>

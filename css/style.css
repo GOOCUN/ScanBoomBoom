@@ -312,3 +312,43 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 }
 .btn-skip:hover { color: #8B949E; }
 
+/* ---- 关于按钮 ---- */
+.about-btn {
+    background: none; border: none; color: #6E7681;
+    font-size: 16px; cursor: pointer; padding: 2px 4px;
+    transition: color .15s; flex-shrink: 0;
+}
+.about-btn:hover { color: #C9D1D9; }
+
+/* ---- 关于叠层 ---- */
+.about-overlay {
+    position: fixed; inset: 0; z-index: 290;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,17,23,.96); backdrop-filter: blur(12px);
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.about-overlay.active { opacity: 1; pointer-events: auto; }
+.about-content {
+    width: 92%; max-width: 400px; max-height: 80vh;
+    background: #161B22; border: 1px solid #30363D; border-radius: 16px;
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.about-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid #21262D;
+}
+.about-title { font-size: 18px; font-weight: 800; color: #C9D1D9; }
+.about-close {
+    background: none; border: none; color: #8B949E; font-size: 18px;
+    cursor: pointer; padding: 4px 8px; transition: color .15s;
+}
+.about-close:hover { color: #F85149; }
+.about-body {
+    padding: 16px 18px; overflow-y: auto; font-size: 13px; line-height: 1.7; color: #8B949E;
+}
+.about-body section { margin-bottom: 14px; }
+.about-body h3 { font-size: 14px; font-weight: 700; color: #C9D1D9; margin-bottom: 4px; }
+.about-body p { margin-bottom: 4px; }
+.about-body ul { padding-left: 18px; margin: 4px 0; }
+.about-body li { margin-bottom: 2px; }
+

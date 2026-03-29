@@ -7,13 +7,15 @@
 // ==================== 关卡配置 ====================
 // 雷密度保底 ≥17%，避免首击连锁铺满全图
 function getLevelConfig(level) {
-    if (level <= 3)  return { w: 6, h: 6, mines: 5 + level,                time: 60 };  // 6,7,8   → 17-22%
-    if (level <= 7)  return { w: 6, h: 6, mines: 5 + level,                time: 60 };  // 9,10,11,12 → 25-33%
-    if (level <= 12) return { w: 7, h: 7, mines: 3 + level,                time: 55 };  // 11,12,13,14,15 → 22-31%
-    if (level <= 17) return { w: 7, h: 7, mines: Math.min(2 + level, 18),  time: 55 };  // 15,16,17,18,18 → 31-37%
-    if (level <= 22) return { w: 8, h: 8, mines: level - 1,                time: 50 };  // 17,18,19,20,21 → 27-33%
-    return { w: 8, h: 8, mines: Math.min(level - 2, 24),                   time: 45 };  // 21→24  → 33-38%
+    if (level <= 3)  return { w: 6, h: 6, mines: 5 + level               };  // 6,7,8   → 17-22%
+    if (level <= 7)  return { w: 6, h: 6, mines: 5 + level               };  // 9,10,11,12 → 25-33%
+    if (level <= 12) return { w: 7, h: 7, mines: 3 + level               };  // 11,12,13,14,15 → 22-31%
+    if (level <= 17) return { w: 7, h: 7, mines: Math.min(2 + level, 18) };  // 15,16,17,18,18 → 31-37%
+    if (level <= 22) return { w: 8, h: 8, mines: level - 1               };  // 17,18,19,20,21 → 27-33%
+    return { w: 8, h: 8, mines: Math.min(level - 2, 24)                  };  // 21→24  → 33-38%
 }
+
+const BASE_TIME = 60; // 所有关卡统一60秒
 
 // 链式时间奖励（弱化：只有大片翻开才给）
 function getChainTimeBonus(chainLen) {
@@ -21,11 +23,13 @@ function getChainTimeBonus(chainLen) {
     return 0;
 }
 
-// 速推奖励配置
-const RUSH_TIERS = [
-    { steps: 4, window: 8, bonus: 3, label: '速推!' },
-    { steps: 6, window: 6, bonus: 5, label: '极速!!' },
-];
+// 速推奖励配置（按关卡阶段收紧）
+function getRushTiers(level) {
+    if (level <= 7)  return [ { steps: 4, window: 10, bonus: 4, label: '速推!' }, { steps: 6, window: 8, bonus: 6, label: '极速!!' } ];
+    if (level <= 14) return [ { steps: 4, window: 8,  bonus: 3, label: '速推!' }, { steps: 6, window: 7, bonus: 5, label: '极速!!' } ];
+    if (level <= 22) return [ { steps: 4, window: 7,  bonus: 3, label: '速推!' }, { steps: 6, window: 5, bonus: 5, label: '极速!!' } ];
+    return                  [ { steps: 4, window: 6,  bonus: 2, label: '速推!' }, { steps: 6, window: 4, bonus: 4, label: '极速!!' } ];
+}
 
 // ==================== 修饰器定义 ====================
 const MODIFIERS = {
@@ -40,6 +44,13 @@ function getBlueMineRatio(level) {
     if (level < 6) return 0;
     if (level <= 10) return 0.3;
     return 0.5;
+}
+
+// 蓝雷扣时比例（按关卡递增）
+function getBlueTimePenalty(level) {
+    if (level <= 10) return 1 / 4;
+    if (level <= 17) return 1 / 3;
+    return 1 / 2;
 }
 
 // ==================== 存档 ====================
@@ -122,6 +133,7 @@ class Game {
             resumeBtn:      document.getElementById('resumeBtn'),
             courageOverlay: document.getElementById('courageOverlay'),
             courageScore:   document.getElementById('courageScore'),
+            courageTime:    document.getElementById('courageTime'),
             courageParticles: document.getElementById('courageParticles'),
             rushBar:        document.getElementById('rushBar'),
             rushPips:       document.querySelectorAll('.rush-pip'),
@@ -139,6 +151,9 @@ class Game {
             modLevel:       document.getElementById('modifierLevel'),
             modStartBtn:    document.getElementById('modifierStartBtn'),
             modSkipBtn:     document.getElementById('modifierSkipBtn'),
+            aboutBtn:       document.getElementById('aboutBtn'),
+            aboutOverlay:   document.getElementById('aboutOverlay'),
+            aboutCloseBtn:  document.getElementById('aboutCloseBtn'),
         };
 
         this.audioCtx = null;
@@ -224,6 +239,10 @@ class Game {
         // 暂停 / 继续
         this.el.pauseBtn.addEventListener('click', () => this._togglePause());
         this.el.resumeBtn.addEventListener('click', () => this._togglePause());
+
+        // 关于按钮
+        this.el.aboutBtn.addEventListener('click', () => this._toggleAbout());
+        this.el.aboutCloseBtn.addEventListener('click', () => this._toggleAbout());
 
         // 结算按钮
         this.el.nextBtn.addEventListener('click', () => {
@@ -325,6 +344,18 @@ class Game {
         }
     }
 
+    _toggleAbout() {
+        const active = this.el.aboutOverlay.classList.toggle('active');
+        if (active && this.state === 'playing') {
+            this._prevStateAbout = 'playing';
+            this.state = 'paused';
+        } else if (!active && this._prevStateAbout) {
+            this.state = this._prevStateAbout;
+            this.lastTick = performance.now();
+            this._prevStateAbout = null;
+        }
+    }
+
     // ==================== 关卡控制 ====================
 
     _startLevel() {
@@ -341,7 +372,7 @@ class Game {
         this.renderer.setBoard(this.board);
 
         // 修饰器: 争分夺秒 → 时间-30%
-        let timeBase = cfg.time;
+        let timeBase = BASE_TIME;
         if (this.activeMods.has('rush')) timeBase = Math.round(timeBase * 0.7);
         this.time = timeBase;
         this.maxTime = timeBase;
@@ -434,10 +465,7 @@ class Game {
         }
 
         // ===== 勇气奖励检测（翻开前检查） =====
-        // 条件：死棋 + 已翻开安全格 ≥ 75% 总安全格（避免开局就触发）
-        const progress = this.board.revealedSafe / this.board.totalSafe;
-        const isDeadBoard = this.board.generated && progress >= 0.75
-            && !this.board.hasSafeMove();
+        const isDeadBoard = this.board.generated && !this.board.hasSafeMove();
 
         const result = this.board.reveal(pos.x, pos.y);
         if (!result) return;
@@ -477,8 +505,8 @@ class Game {
         this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
 
         if (isBlue) {
-            // 蓝雷：扣 1/3 剩余时间，不扣命
-            const timeLoss = Math.ceil(this.time / 3);
+            // 蓝雷：按关卡扣时间，不扣命
+            const timeLoss = Math.ceil(this.time * getBlueTimePenalty(this.level));
             this.time = Math.max(0, this.time - timeLoss);
             this._uiTimer();
             this._uiCombo();
@@ -577,55 +605,86 @@ class Game {
         this.combo += n;
         this.courageCnt++;
 
-        // 总分翻倍
-        const bonusPoints = this.totalScore; // 当前总分再加一次 = 翻倍
+        const progress = this.board.revealedSafe / this.board.totalSafe;
+
+        // 分数奖励：总分 × 进度
+        const bonusPoints = Math.round(this.totalScore * progress);
         this.totalScore += bonusPoints;
         this.levelScore += bonusPoints;
 
-        // 时间回满（不超过上限）
-        this.time = this.maxTime;
+        // 生存奖励
+        let survivalMsg = '';
+        if (progress >= 0.6) {
+            // 高进度 → +1命 or 分数
+            if (this.lives < this.MAX_LIVES) {
+                this.lives++;
+                this._uiLives();
+                survivalMsg = '❤️ +1生命';
+            } else {
+                const extraPoints = Math.round(this.levelScore * 0.5);
+                this.totalScore += extraPoints;
+                this.levelScore += extraPoints;
+                survivalMsg = `💰 +${extraPoints}分`;
+            }
+        } else {
+            // 低进度 → 回复时间
+            const timeRestore = Math.round(this.maxTime * progress);
+            this.time = Math.min(this.time + timeRestore, this.maxTime);
+            this._uiTimer();
+            survivalMsg = `⏰ +${timeRestore}s`;
+        }
 
         this._uiScore();
         this._uiCombo();
-        this._uiTimer();
 
         // 翻开动画
         this.renderer.animateReveal(cells);
 
-        // 超强反馈特效
-        this.renderer.animateCourage();
-        this._playSound('courage');
-
-        // 飘分（大号金色）
         const mid = cells[Math.floor(cells.length / 2)];
         const { px, py } = this._boardToFloat(mid.x, mid.y);
-        this.floats.spawn(`🎲 总分×2！ +${bonusPoints}`, px, py, '#FFD700', true);
-        setTimeout(() => {
-            this.floats.spawn(`⏰ 时间回满!`, px, py - 36, '#79C0FF', true);
-        }, 300);
 
-        // 暂停游戏 + 显示勇气奖励叠层
-        this.state = 'courage';
-        this._showCourageOverlay(bonusPoints);
+        // 分级反馈
+        if (progress >= 0.4) {
+            // 中高进度：完整特效
+            const intensity = progress >= 0.8 ? 2 : 1;
+            this.renderer.animateCourage(intensity);
+            this._playSound('courage');
+            this.floats.spawn(`🎲 +${bonusPoints}`, px, py, '#FFD700', true);
+            setTimeout(() => {
+                this.floats.spawn(survivalMsg, px, py - 36, '#79C0FF', true);
+            }, 300);
+            this.state = 'courage';
+            this._showCourageOverlay(bonusPoints, survivalMsg, progress);
+        } else {
+            // 低进度：轻反馈，不暂停
+            this._playSound('pop', 3);
+            this.floats.spawn(`🎲 +${bonusPoints}`, px, py, '#F0C040');
+            this.floats.spawn(survivalMsg, px, py - 28, '#79C0FF');
+
+            if (this.board.isComplete()) {
+                this._applyWinBonus();
+                this._endGame('win');
+            }
+        }
     }
 
-    _showCourageOverlay(bonusPoints) {
-        this.el.courageScore.textContent = `总分×2  +${bonusPoints}`;
-        this._spawnConfetti();
+    _showCourageOverlay(bonusPoints, survivalMsg, progress) {
+        this.el.courageScore.textContent = `+${bonusPoints}分 · ${survivalMsg}`;
+        this.el.courageTime.textContent = progress >= 0.8 ? '🔥 勇气爆发！' : '🎲 勇气奖励';
+        if (progress >= 0.6) this._spawnConfetti();
         this.el.courageOverlay.classList.add('active');
 
-        // 2.5秒后自动关闭
+        const dur = progress >= 0.6 ? 2500 : 1500;
         setTimeout(() => {
             this.el.courageOverlay.classList.remove('active');
             this.state = 'playing';
             this.lastTick = performance.now();
 
-            // 检查是否通关
             if (this.board.isComplete()) {
                 this._applyWinBonus();
                 this._endGame('win');
             }
-        }, 2500);
+        }, dur);
     }
 
     _spawnConfetti() {
@@ -781,15 +840,16 @@ class Game {
         }
 
         // 从高到低检查 tier
-        for (let i = RUSH_TIERS.length - 1; i >= 0; i--) {
-            const tier = RUSH_TIERS[i];
+        const tiers = getRushTiers(this.level);
+        for (let i = tiers.length - 1; i >= 0; i--) {
+            const tier = tiers[i];
             if (this.rushClicks.length >= tier.steps) {
                 const span = now - this.rushClicks[this.rushClicks.length - tier.steps];
                 if (span <= tier.window * 1000) {
                     // 触发速推奖励
                     this.time = Math.min(this.time + tier.bonus, this.maxTime);
                     this._uiTimer();
-                    this.floats.spawn(`⚡${tier.label} +${tier.bonus}s`, floatPx, floatPy - 56, '#79C0FF', tier === RUSH_TIERS[1]);
+                    this.floats.spawn(`⚡${tier.label} +${tier.bonus}s`, floatPx, floatPy - 56, '#79C0FF', i === tiers.length - 1);
                     this._playSound('rush');
                     // 触发后重置，防止连续重复触发
                     this.rushClicks = [];
@@ -803,8 +863,8 @@ class Game {
 
     _uiRush() {
         const now = performance.now();
-        const target = RUSH_TIERS[0]; // 基础目标：4步
-        // 只显示8秒内的有效点击数
+        const target = getRushTiers(this.level)[0]; // 基础目标
+        // 只显示窗口内的有效点击数
         const cutoff = now - target.window * 1000;
         const validCount = this.rushClicks.filter(t => t >= cutoff).length;
 
