@@ -33,7 +33,7 @@ function getRushTiers(level) {
 
 // ==================== 修饰器定义 ====================
 const MODIFIERS = {
-    chill:   { icon: '�', name: '老太踱步', desc: '时间+100%，得分-30%',        mult: 0.7, always: true },
+    chill:   { icon: '🤔', name: '优柔寡断', desc: '时间+100%，得分-30%',        mult: 0.7, always: true },
     allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 1.6 },
     rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短20%',           mult: 1.3 },
     noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.3 },
@@ -279,13 +279,15 @@ class Game {
         this.el.modLevel.textContent = `第${this.level}关`;
         this.el.modMult.textContent = '×1.0';
 
-        // 随机选3个修饰器展示
-        const keys = Object.keys(MODIFIERS);
-        for (let i = keys.length - 1; i > 0; i--) {
+        // 优柔寡断始终展示 + 随机抽3个其他修饰器
+        const allKeys = Object.keys(MODIFIERS);
+        const alwaysKeys = allKeys.filter(k => MODIFIERS[k].always);
+        const poolKeys = allKeys.filter(k => !MODIFIERS[k].always);
+        for (let i = poolKeys.length - 1; i > 0; i--) {
             const j = Math.random() * (i + 1) | 0;
-            [keys[i], keys[j]] = [keys[j], keys[i]];
+            [poolKeys[i], poolKeys[j]] = [poolKeys[j], poolKeys[i]];
         }
-        const shown = keys.slice(0, 3);
+        const shown = [...alwaysKeys, ...poolKeys.slice(0, 3)];
 
         this.el.modList.innerHTML = '';
         for (const key of shown) {

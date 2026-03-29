@@ -45,21 +45,51 @@ class Board {
 
     /** 首次点击后生成棋盘 */
     generate(safeX, safeY) {
-        const MAX_ATTEMPTS = 50;
+        const MAX_ATTEMPTS = 80;
+        let bestAttempt = null;
+        let bestDiff = Infinity;
+
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             this._initCells();
             this.revealedSafe = 0;
             this._placeMines(safeX, safeY, this.seed + attempt);
             this._calcAdjacent();
-            const solvable = this._isSolvable(safeX, safeY);
-            // forceUnsolvable: 赌徒模式要求必须有死棋
-            if (this.forceUnsolvable ? !solvable : solvable) {
-                this.generated = true;
-                this.seed = this.seed + attempt;
-                // 分配蓝雷
-                if (this.blueMineRatio > 0) this._assignBlueMines();
-                return;
+            const solved = this._solveCount(safeX, safeY);
+            const ratio = solved / this.totalSafe;
+
+            if (this.forceUnsolvable) {
+                // 赌徒模式：要求 40%~70% 可解（半可解棋盘）
+                if (ratio >= 0.4 && ratio <= 0.7) {
+                    this.generated = true;
+                    this.seed = this.seed + attempt;
+                    if (this.blueMineRatio > 0) this._assignBlueMines();
+                    return;
+                }
+                // 记录最接近目标区间的尝试
+                const mid = 0.55;
+                const diff = Math.abs(ratio - mid);
+                if (ratio < 1.0 && diff < bestDiff) {
+                    bestDiff = diff;
+                    bestAttempt = attempt;
+                }
+            } else {
+                // 普通模式：要求完全可解
+                if (ratio >= 1.0) {
+                    this.generated = true;
+                    this.seed = this.seed + attempt;
+                    if (this.blueMineRatio > 0) this._assignBlueMines();
+                    return;
+                }
             }
+        }
+
+        // 回退：赌徒模式用最接近的，普通模式用最后一次
+        if (this.forceUnsolvable && bestAttempt !== null) {
+            this._initCells();
+            this.revealedSafe = 0;
+            this._placeMines(safeX, safeY, this.seed + bestAttempt);
+            this._calcAdjacent();
+            this.seed = this.seed + bestAttempt;
         }
         this.generated = true;
         if (this.blueMineRatio > 0) this._assignBlueMines();
@@ -112,8 +142,8 @@ class Board {
     }
 
     // ==================== 逻辑求解器 ====================
-    /** 检查从 (safeX, safeY) 开始是否能纯逻辑解出所有安全格 */
-    _isSolvable(safeX, safeY) {
+    /** 检查从 (safeX, safeY) 开始能纯逻辑解出多少安全格，返回已解出数量 */
+    _solveCount(safeX, safeY) {
         const w = this.width, h = this.height, total = w * h;
         // 模拟状态：0=未知, 1=已翻开, 2=标记为雷
         const state = new Uint8Array(total);
@@ -184,7 +214,11 @@ class Board {
             }
         }
 
-        return revealed >= this.totalSafe;
+        return revealed;
+    }
+
+    _isSolvable(safeX, safeY) {
+        return this._solveCount(safeX, safeY) >= this.totalSafe;
     }
 
     // ==================== 游戏操作 ====================
