@@ -23,6 +23,7 @@ class Board {
         this.totalSafe = width * height - mineCount;
         this.forceUnsolvable = false;
         this.blueMineRatio = 0;
+        this._stateVersion = 0;
         this._initCells();
     }
 
@@ -326,9 +327,11 @@ class Board {
 
         if (c.mine) {
             c.revealed = true;
+            this._stateVersion++;
             return { type: 'mine', x, y };
         }
 
+        this._stateVersion++;
         const result = [];
         const queue = [{ x, y, dist: 0 }];
         const visited = new Set([`${x},${y}`]);
@@ -363,6 +366,7 @@ class Board {
         const c = this.cell(x, y);
         if (!c || c.revealed) return false;
         c.flagged = !c.flagged;
+        this._stateVersion++;
         return true;
     }
 
@@ -390,8 +394,7 @@ class Board {
 
     /** 检查当前局面是否存在可通过逻辑推导确定的安全格 */
     hasSafeMove() {
-        // 缓存：同一 revealedSafe 数不重复计算
-        if (this._safeCache === this.revealedSafe) return this._safeCacheResult;
+        if (this._safeCache === this._stateVersion) return this._safeCacheResult;
 
         const w = this.width, total = w * this.height;
         const state = new Uint8Array(total);
@@ -402,7 +405,7 @@ class Board {
         }
 
         const found = this._constraintSolve(state, true, true) > 0;
-        this._safeCache = this.revealedSafe;
+        this._safeCache = this._stateVersion;
         this._safeCacheResult = found;
         return found;
     }
