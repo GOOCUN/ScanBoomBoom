@@ -45,7 +45,7 @@ class Board {
 
     /** 首次点击后生成棋盘 */
     generate(safeX, safeY) {
-        const MAX_ATTEMPTS = 200;
+        const MAX_ATTEMPTS = 100;
         let bestAttempt = null;
         let bestScore = -1;  // 普通模式：最高可解率；赌徒模式：最接近0.55
 
@@ -151,10 +151,10 @@ class Board {
      * 通用约束求解器，返回能推理出的安全格数量
      * @param {Uint8Array} state - 0=未知, 1=已翻开, 2=标雷
      * @param {boolean} earlyExit - true 时找到第一个安全格即返回
+     * @param {boolean} useSubset - 是否启用子集约束推理（较慢但更强）
      */
-    _constraintSolve(state, earlyExit) {
+    _constraintSolve(state, earlyExit, useSubset) {
         const w = this.width, h = this.height, total = w * h;
-        const idx = (x, y) => y * w + x;
         const isMine = i => this.cells[i].mine;
         let revealed = 0;
         const revealQueue = [];
@@ -170,7 +170,7 @@ class Board {
                         if (!dx && !dy) continue;
                         const nx = x + dx, ny = y + dy;
                         if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                            const ni = idx(nx, ny);
+                            const ni = ny * w + nx;
                             if (state[ni] === 0) revealQueue.push(ni);
                         }
                     }
@@ -178,10 +178,8 @@ class Board {
             }
         };
 
-        // 先处理队列中已有的待翻开格
         while (revealQueue.length > 0) revealCell(revealQueue.shift());
 
-        // 收集每个已翻开数字格的约束信息
         const getConstraint = (i) => {
             const x = i % w, y = (i / w) | 0;
             let unknowns = [], flags = 0;
@@ -190,7 +188,7 @@ class Board {
                     if (!dx && !dy) continue;
                     const nx = x + dx, ny = y + dy;
                     if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-                    const ni = idx(nx, ny);
+                    const ni = ny * w + nx;
                     if (state[ni] === 0) unknowns.push(ni);
                     else if (state[ni] === 2) flags++;
                 }
@@ -201,18 +199,18 @@ class Board {
         let changed = true;
         while (changed) {
             changed = false;
+
+            // 规则 1 & 2：基础单格约束
             for (let i = 0; i < total; i++) {
                 if (state[i] !== 1 || this.cells[i].adj <= 0) continue;
                 const c = getConstraint(i);
                 if (c.unknowns.length === 0) continue;
 
-                // 规则1：剩余雷数 == 未知数 → 全是雷
                 if (c.mines === c.unknowns.length) {
                     for (const ni of c.unknowns) {
                         if (state[ni] === 0) { state[ni] = 2; changed = true; }
                     }
                 }
-                // 规则2：已标够雷 → 未知格全安全
                 if (c.mines === 0 && c.unknowns.length > 0) {
                     for (const ni of c.unknowns) revealQueue.push(ni);
                     while (revealQueue.length > 0) {
@@ -223,51 +221,57 @@ class Board {
                 }
             }
 
-            if (changed) continue;
+            if (changed || !useSubset) continue;
 
-            // 规则3：子集约束推理
-            // 如果格A的未知集是格B的未知集的子集，
-            // 且 B.mines - A.mines == B.unknowns\A.unknowns 的大小，
-            // 则差集全是雷；若 B.mines == A.mines，则差集全安全
+            // 规则 3：子集约束（仅比较距离≤2的格对，远距离不可能共享未知邻居）
             for (let i = 0; i < total; i++) {
                 if (state[i] !== 1 || this.cells[i].adj <= 0) continue;
                 const cA = getConstraint(i);
                 if (cA.unknowns.length === 0) continue;
+                const xi = i % w, yi = (i / w) | 0;
                 const setA = new Set(cA.unknowns);
 
-                for (let j = i + 1; j < total; j++) {
-                    if (state[j] !== 1 || this.cells[j].adj <= 0) continue;
-                    const cB = getConstraint(j);
-                    if (cB.unknowns.length === 0) continue;
+                // 只检查距离 ≤ 2 范围内的格
+                for (let dy = -2; dy <= 2; dy++) {
+                    for (let dx = -2; dx <= 2; dx++) {
+                        if (!dx && !dy) continue;
+                        const nx = xi + dx, ny = yi + dy;
+                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+                        const j = ny * w + nx;
+                        if (j <= i) continue; // 避免重复比较
+                        if (state[j] !== 1 || this.cells[j].adj <= 0) continue;
+                        const cB = getConstraint(j);
+                        if (cB.unknowns.length === 0) continue;
 
-                    // 尝试 A ⊆ B 和 B ⊆ A 两个方向
-                    for (const [sub, sup, subC, supC] of [
-                        [setA, new Set(cB.unknowns), cA, cB],
-                        [new Set(cB.unknowns), setA, cB, cA],
-                    ]) {
-                        if (sub.size >= sup.size) continue;
-                        let isSubset = true;
-                        for (const v of sub) { if (!sup.has(v)) { isSubset = false; break; } }
-                        if (!isSubset) continue;
+                        const setB = new Set(cB.unknowns);
+                        // 尝试 A ⊂ B 和 B ⊂ A
+                        for (const [sub, sup, subC, supC] of [
+                            [setA, setB, cA, cB],
+                            [setB, setA, cB, cA],
+                        ]) {
+                            if (sub.size >= sup.size) continue;
+                            let isSubset = true;
+                            for (const v of sub) { if (!sup.has(v)) { isSubset = false; break; } }
+                            if (!isSubset) continue;
 
-                        const diff = [];
-                        for (const v of sup) { if (!sub.has(v)) diff.push(v); }
-                        const diffMines = supC.mines - subC.mines;
+                            const diff = [];
+                            for (const v of sup) { if (!sub.has(v)) diff.push(v); }
+                            const diffMines = supC.mines - subC.mines;
 
-                        if (diffMines === diff.length) {
-                            // 差集全是雷
-                            for (const ni of diff) {
-                                if (state[ni] === 0) { state[ni] = 2; changed = true; }
+                            if (diffMines === diff.length) {
+                                for (const ni of diff) {
+                                    if (state[ni] === 0) { state[ni] = 2; changed = true; }
+                                }
+                            } else if (diffMines === 0) {
+                                for (const ni of diff) revealQueue.push(ni);
+                                while (revealQueue.length > 0) {
+                                    revealCell(revealQueue.shift());
+                                    changed = true;
+                                }
+                                if (earlyExit && revealed > 0) return revealed;
                             }
-                        } else if (diffMines === 0) {
-                            // 差集全安全
-                            for (const ni of diff) revealQueue.push(ni);
-                            while (revealQueue.length > 0) {
-                                revealCell(revealQueue.shift());
-                                changed = true;
-                            }
-                            if (earlyExit && revealed > 0) return revealed;
                         }
+                        if (changed) break;
                     }
                     if (changed) break;
                 }
@@ -306,7 +310,7 @@ class Board {
         };
         while (queue.length > 0) revealInit(queue.shift());
 
-        return initRevealed + this._constraintSolve(state, false);
+        return initRevealed + this._constraintSolve(state, false, false);
     }
 
     _isSolvable(safeX, safeY) {
@@ -397,7 +401,7 @@ class Board {
             else if (c.flagged) state[i] = 2;
         }
 
-        const found = this._constraintSolve(state, true) > 0;
+        const found = this._constraintSolve(state, true, true) > 0;
         this._safeCache = this.revealedSafe;
         this._safeCacheResult = found;
         return found;
