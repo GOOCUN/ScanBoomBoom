@@ -769,7 +769,7 @@ class Game {
             if (isWin) {
                 this.el.title.textContent = '🎉 通关！';
                 const parts = [`第${this.level}关完成`];
-                const tBonus = Math.round(Math.ceil(this.time) * 10 * this.scoreMult);
+                const tBonus = Math.round(Math.ceil(this.time) * 5 * this.scoreMult);
                 parts.push(`时间 +${tBonus}`);
                 if (this.noDmgBonus > 0) parts.push(`🛡️无伤 +${this.noDmgBonus}`);
                 if (this.scoreMult > 1) parts.push(`倍率 ×${this.scoreMult.toFixed(1)}`);
