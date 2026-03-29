@@ -37,7 +37,7 @@ const MODIFIERS = {
     allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 1.6 },
     rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短20%',           mult: 1.3 },
     noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.3 },
-    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.5 },
+    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.3 },
 };
 
 // 蓝雷比例（按关卡）
@@ -390,6 +390,7 @@ class Game {
         this.lastTick = 0;
         this.levelScore = 0;
         this.hitMines = 0;
+        this.consecutiveCourage = 0;
 
         // 重置标旗模式
         this.flagMode = false;
@@ -546,6 +547,7 @@ class Game {
     // ==================== 安全翻开 ====================
 
     _onSafeReveal(cells) {
+        this.consecutiveCourage = 0; // 有推理步骤，重置连续勇气计数
         const n = cells.length;
         this.combo += n;
         const mult = this.combo >= 10 ? 3 : this.combo >= 5 ? 2 : 1;
@@ -613,8 +615,10 @@ class Game {
 
         const progress = this.board.revealedSafe / this.board.totalSafe;
 
-        // 分数奖励：本关分 × 进度
-        const bonusPoints = Math.round(this.levelScore * progress);
+        // 分数奖励：本关分 × 进度，连续触发递减（中间有推理步骤则重置）
+        const decay = Math.pow(0.5, this.consecutiveCourage);
+        this.consecutiveCourage++;
+        const bonusPoints = Math.round(this.levelScore * progress * decay);
         this.totalScore += bonusPoints;
         this.levelScore += bonusPoints;
 
