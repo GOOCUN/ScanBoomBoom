@@ -45,9 +45,9 @@ class Board {
 
     /** 首次点击后生成棋盘 */
     generate(safeX, safeY) {
-        const MAX_ATTEMPTS = 80;
+        const MAX_ATTEMPTS = 200;
         let bestAttempt = null;
-        let bestDiff = Infinity;
+        let bestScore = -1;  // 普通模式：最高可解率；赌徒模式：最接近0.55
 
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             this._initCells();
@@ -66,10 +66,9 @@ class Board {
                     return;
                 }
                 // 记录最接近目标区间的尝试
-                const mid = 0.55;
-                const diff = Math.abs(ratio - mid);
-                if (ratio < 1.0 && diff < bestDiff) {
-                    bestDiff = diff;
+                const score = -Math.abs(ratio - 0.55);
+                if (ratio < 1.0 && score > bestScore) {
+                    bestScore = score;
                     bestAttempt = attempt;
                 }
             } else {
@@ -80,11 +79,16 @@ class Board {
                     if (this.blueMineRatio > 0) this._assignBlueMines();
                     return;
                 }
+                // 记录可解率最高的尝试作为回退
+                if (ratio > bestScore) {
+                    bestScore = ratio;
+                    bestAttempt = attempt;
+                }
             }
         }
 
-        // 回退：赌徒模式用最接近的，普通模式用最后一次
-        if (this.forceUnsolvable && bestAttempt !== null) {
+        // 回退：用最佳尝试重新生成
+        if (bestAttempt !== null) {
             this._initCells();
             this.revealedSafe = 0;
             this._placeMines(safeX, safeY, this.seed + bestAttempt);
@@ -142,25 +146,24 @@ class Board {
     }
 
     // ==================== 逻辑求解器 ====================
-    /** 检查从 (safeX, safeY) 开始能纯逻辑解出多少安全格，返回已解出数量 */
-    _solveCount(safeX, safeY) {
-        const w = this.width, h = this.height, total = w * h;
-        // 模拟状态：0=未知, 1=已翻开, 2=标记为雷
-        const state = new Uint8Array(total);
-        const adj = new Int8Array(total);
-        for (let i = 0; i < total; i++) adj[i] = this.cells[i].adj;
-        const isMine = i => this.cells[i].mine;
-        const idx = (x, y) => y * w + x;
 
-        // BFS 翻开 (safeX, safeY) 的连锁
-        const revealQueue = [idx(safeX, safeY)];
+    /**
+     * 通用约束求解器，返回能推理出的安全格数量
+     * @param {Uint8Array} state - 0=未知, 1=已翻开, 2=标雷
+     * @param {boolean} earlyExit - true 时找到第一个安全格即返回
+     */
+    _constraintSolve(state, earlyExit) {
+        const w = this.width, h = this.height, total = w * h;
+        const idx = (x, y) => y * w + x;
+        const isMine = i => this.cells[i].mine;
         let revealed = 0;
+        const revealQueue = [];
 
         const revealCell = (i) => {
             if (state[i] !== 0 || isMine(i)) return;
             state[i] = 1;
             revealed++;
-            if (adj[i] === 0) {
+            if (this.cells[i].adj === 0) {
                 const x = i % w, y = (i / w) | 0;
                 for (let dy = -1; dy <= 1; dy++) {
                     for (let dx = -1; dx <= 1; dx++) {
@@ -175,46 +178,135 @@ class Board {
             }
         };
 
+        // 先处理队列中已有的待翻开格
         while (revealQueue.length > 0) revealCell(revealQueue.shift());
 
-        // 迭代逻辑推导
+        // 收集每个已翻开数字格的约束信息
+        const getConstraint = (i) => {
+            const x = i % w, y = (i / w) | 0;
+            let unknowns = [], flags = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (!dx && !dy) continue;
+                    const nx = x + dx, ny = y + dy;
+                    if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+                    const ni = idx(nx, ny);
+                    if (state[ni] === 0) unknowns.push(ni);
+                    else if (state[ni] === 2) flags++;
+                }
+            }
+            return { unknowns, flags, mines: this.cells[i].adj - flags };
+        };
+
         let changed = true;
         while (changed) {
             changed = false;
             for (let i = 0; i < total; i++) {
-                if (state[i] !== 1 || adj[i] <= 0) continue;
-                const x = i % w, y = (i / w) | 0;
-                let unknowns = [], flags = 0;
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        if (!dx && !dy) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-                        const ni = idx(nx, ny);
-                        if (state[ni] === 0) unknowns.push(ni);
-                        else if (state[ni] === 2) flags++;
-                    }
-                }
-                if (unknowns.length === 0) continue;
+                if (state[i] !== 1 || this.cells[i].adj <= 0) continue;
+                const c = getConstraint(i);
+                if (c.unknowns.length === 0) continue;
 
                 // 规则1：剩余雷数 == 未知数 → 全是雷
-                if (adj[i] - flags === unknowns.length) {
-                    for (const ni of unknowns) {
+                if (c.mines === c.unknowns.length) {
+                    for (const ni of c.unknowns) {
                         if (state[ni] === 0) { state[ni] = 2; changed = true; }
                     }
                 }
                 // 规则2：已标够雷 → 未知格全安全
-                if (adj[i] === flags && unknowns.length > 0) {
-                    for (const ni of unknowns) revealQueue.push(ni);
+                if (c.mines === 0 && c.unknowns.length > 0) {
+                    for (const ni of c.unknowns) revealQueue.push(ni);
                     while (revealQueue.length > 0) {
                         revealCell(revealQueue.shift());
                         changed = true;
                     }
+                    if (earlyExit && revealed > 0) return revealed;
                 }
+            }
+
+            if (changed) continue;
+
+            // 规则3：子集约束推理
+            // 如果格A的未知集是格B的未知集的子集，
+            // 且 B.mines - A.mines == B.unknowns\A.unknowns 的大小，
+            // 则差集全是雷；若 B.mines == A.mines，则差集全安全
+            for (let i = 0; i < total; i++) {
+                if (state[i] !== 1 || this.cells[i].adj <= 0) continue;
+                const cA = getConstraint(i);
+                if (cA.unknowns.length === 0) continue;
+                const setA = new Set(cA.unknowns);
+
+                for (let j = i + 1; j < total; j++) {
+                    if (state[j] !== 1 || this.cells[j].adj <= 0) continue;
+                    const cB = getConstraint(j);
+                    if (cB.unknowns.length === 0) continue;
+
+                    // 尝试 A ⊆ B 和 B ⊆ A 两个方向
+                    for (const [sub, sup, subC, supC] of [
+                        [setA, new Set(cB.unknowns), cA, cB],
+                        [new Set(cB.unknowns), setA, cB, cA],
+                    ]) {
+                        if (sub.size >= sup.size) continue;
+                        let isSubset = true;
+                        for (const v of sub) { if (!sup.has(v)) { isSubset = false; break; } }
+                        if (!isSubset) continue;
+
+                        const diff = [];
+                        for (const v of sup) { if (!sub.has(v)) diff.push(v); }
+                        const diffMines = supC.mines - subC.mines;
+
+                        if (diffMines === diff.length) {
+                            // 差集全是雷
+                            for (const ni of diff) {
+                                if (state[ni] === 0) { state[ni] = 2; changed = true; }
+                            }
+                        } else if (diffMines === 0) {
+                            // 差集全安全
+                            for (const ni of diff) revealQueue.push(ni);
+                            while (revealQueue.length > 0) {
+                                revealCell(revealQueue.shift());
+                                changed = true;
+                            }
+                            if (earlyExit && revealed > 0) return revealed;
+                        }
+                    }
+                    if (changed) break;
+                }
+                if (changed) break;
             }
         }
 
         return revealed;
+    }
+
+    /** 检查从 (safeX, safeY) 开始能纯逻辑解出多少安全格，返回已解出数量 */
+    _solveCount(safeX, safeY) {
+        const w = this.width, total = w * this.height;
+        const state = new Uint8Array(total);
+        const startIdx = safeY * w + safeX;
+        // 先模拟首次点击的 BFS
+        const queue = [startIdx];
+        let initRevealed = 0;
+        const revealInit = (i) => {
+            if (state[i] !== 0 || this.cells[i].mine) return;
+            state[i] = 1;
+            initRevealed++;
+            if (this.cells[i].adj === 0) {
+                const x = i % w, y = (i / w) | 0;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (!dx && !dy) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx >= 0 && nx < w && ny >= 0 && ny < this.height) {
+                            const ni = ny * w + nx;
+                            if (state[ni] === 0) queue.push(ni);
+                        }
+                    }
+                }
+            }
+        };
+        while (queue.length > 0) revealInit(queue.shift());
+
+        return initRevealed + this._constraintSolve(state, false);
     }
 
     _isSolvable(safeX, safeY) {
@@ -292,77 +384,23 @@ class Board {
         return (results.reveals.length > 0 || results.mines.length > 0) ? results : null;
     }
 
-    /** 检查当前局面是否存在可通过逻辑推导确定的安全格（完整模拟求解） */
+    /** 检查当前局面是否存在可通过逻辑推导确定的安全格 */
     hasSafeMove() {
-        const w = this.width, h = this.height, total = w * h;
-        const idx = (x, y) => y * w + x;
-        const isMine = i => this.cells[i].mine;
-        const state = new Uint8Array(total); // 0=unknown, 1=revealed, 2=flagged/revealed-mine
+        // 缓存：同一 revealedSafe 数不重复计算
+        if (this._safeCache === this.revealedSafe) return this._safeCacheResult;
+
+        const w = this.width, total = w * this.height;
+        const state = new Uint8Array(total);
         for (let i = 0; i < total; i++) {
             const c = this.cells[i];
-            if (c.revealed) state[i] = c.mine ? 2 : 1; // 已翻开的雷视为已知雷（等同flagged）
+            if (c.revealed) state[i] = c.mine ? 2 : 1;
             else if (c.flagged) state[i] = 2;
         }
 
-        let foundSafe = false;
-        const revealQueue = [];
-
-        const revealCell = (i) => {
-            if (state[i] !== 0 || isMine(i)) return;
-            state[i] = 1;
-            foundSafe = true;
-            if (this.cells[i].adj === 0) {
-                const x = i % w, y = (i / w) | 0;
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        if (!dx && !dy) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                            const ni = idx(nx, ny);
-                            if (state[ni] === 0) revealQueue.push(ni);
-                        }
-                    }
-                }
-            }
-        };
-
-        let changed = true;
-        while (changed) {
-            changed = false;
-            for (let i = 0; i < total; i++) {
-                if (state[i] !== 1) continue;
-                const c = this.cells[i];
-                if (c.adj <= 0) continue;
-                const x = i % w, y = (i / w) | 0;
-                let unknowns = [], flags = 0;
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        if (!dx && !dy) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
-                        const ni = idx(nx, ny);
-                        if (state[ni] === 0) unknowns.push(ni);
-                        else if (state[ni] === 2) flags++;
-                    }
-                }
-                if (unknowns.length === 0) continue;
-                // 规则1：剩余雷数 == 未知数 → 全是雷
-                if (c.adj - flags === unknowns.length) {
-                    for (const ni of unknowns) {
-                        if (state[ni] === 0) { state[ni] = 2; changed = true; }
-                    }
-                }
-                // 规则2：已标够雷 → 未知格全安全 → 模拟翻开 + BFS连锁
-                if (c.adj === flags && unknowns.length > 0) {
-                    for (const ni of unknowns) revealQueue.push(ni);
-                    while (revealQueue.length > 0) {
-                        revealCell(revealQueue.shift());
-                        changed = true;
-                    }
-                }
-            }
-        }
-        return foundSafe;
+        const found = this._constraintSolve(state, true) > 0;
+        this._safeCache = this.revealedSafe;
+        this._safeCacheResult = found;
+        return found;
     }
 
     revealMines() {
