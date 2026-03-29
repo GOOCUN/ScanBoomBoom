@@ -33,7 +33,7 @@ function getRushTiers(level) {
 
 // ==================== 修饰器定义 ====================
 const MODIFIERS = {
-    chill:   { icon: '🤔', name: '优柔寡断', desc: '时间+100%，得分-30%',        mult: 0.7, always: true },
+    chill:   { icon: '🤔', name: '优柔寡断', desc: '时间+200%，得分-50%',        mult: 0.5, always: true },
     allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 1.6 },
     rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短20%',           mult: 1.3 },
     noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.3 },
@@ -374,9 +374,9 @@ class Game {
 
         this.renderer.setBoard(this.board);
 
-        // 修饰器: 优柔寡断 → 时间+100%
+        // 修饰器: 优柔寡断 → 时间+200%
         let timeBase = BASE_TIME;
-        if (this.activeMods.has('chill')) timeBase = timeBase * 2;
+        if (this.activeMods.has('chill')) timeBase = timeBase * 3;
 
         // 修饰器: 争分夺秒 → 时间-20%
         if (this.activeMods.has('rush')) timeBase = Math.round(timeBase * 0.8);
