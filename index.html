@@ -3,7 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neuro Mines</title>
+    <title>ScanBoomBoom</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0D1117">
+
+    <!-- iOS Safari 适配 -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ScanBoomBoom">
+    <link rel="apple-touch-icon" href="icons/icon2-192.png">
+    <link rel="icon" type="image/png" href="icons/icon2-192.png">
+
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -91,7 +104,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">🧠 Neuro Mines</span>
+                    <span class="about-title">💣 ScanBoomBoom</span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
@@ -171,5 +184,14 @@
     <script src="js/board.js"></script>
     <script src="js/renderer.js"></script>
     <script src="js/game.js"></script>
+
+    <!-- 注册 Service Worker -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./service-worker.js')
+            .then(reg => console.log('SW registered, scope:', reg.scope))
+            .catch(err => console.warn('SW registration failed:', err));
+    }
+    </script>
 </body>
 </html>
