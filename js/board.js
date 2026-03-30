@@ -159,6 +159,7 @@ class Board {
         const isMine = i => this.cells[i].mine;
         let revealed = 0;
         const revealQueue = [];
+        let maxIter = total * 3; // 安全上限，防止极端情况卡死
 
         const revealCell = (i) => {
             if (state[i] !== 0 || isMine(i)) return;
@@ -199,6 +200,7 @@ class Board {
 
         let changed = true;
         while (changed) {
+            if (--maxIter < 0) break; // 安全保护
             changed = false;
 
             // 规则 1 & 2：基础单格约束

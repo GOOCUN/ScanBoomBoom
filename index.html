@@ -27,6 +27,7 @@
             <span id="timer" class="timer">01:00</span>
             <button id="pauseBtn" class="pause-btn">⏸</button>
             <span id="score" class="score">0</span>
+            <button id="settingsBtn" class="settings-btn">⚙️</button>
             <button id="aboutBtn" class="about-btn">ℹ️</button>
         </div>
 
@@ -100,11 +101,54 @@
         </div>
     </div>
 
+        <!-- 设置叠层 -->
+        <div id="settingsOverlay" class="settings-overlay">
+            <div class="settings-content">
+                <div class="settings-header">
+                    <span class="settings-title">⚙️ 设置</span>
+                    <button id="settingsCloseBtn" class="settings-close">✖</button>
+                </div>
+                <div class="settings-body">
+                    <div class="settings-group">
+                        <div class="settings-group-title">🚩 标旗操作</div>
+                        <label class="settings-radio">
+                            <input type="radio" name="flagMode" value="auto">
+                            <span class="radio-label">切换标旗（自动切回）</span>
+                            <span class="radio-desc">点旗按钮标旗后自动切回翻开模式</span>
+                        </label>
+                        <label class="settings-radio">
+                            <input type="radio" name="flagMode" value="manual">
+                            <span class="radio-label">切换标旗（保持模式）</span>
+                            <span class="radio-desc">需手动点旗按钮切回翻开模式</span>
+                        </label>
+                        <label class="settings-radio">
+                            <input type="radio" name="flagMode" value="longPress">
+                            <span class="radio-label">长按标旗 <span class="recommend-tag">推荐</span></span>
+                            <span class="radio-desc">长按格子标旗，短按翻开，点已标旗格取消</span>
+                        </label>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-group-title">🔊 音效与震动</div>
+                        <label class="settings-toggle">
+                            <span>游戏音效</span>
+                            <input type="checkbox" id="soundToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <label class="settings-toggle">
+                            <span>震动反馈</span>
+                            <input type="checkbox" id="vibrationToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 关于游戏叠层 -->
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom</span>
+                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.1</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
@@ -112,7 +156,7 @@
                         <h3>🎮 基本规则</h3>
                         <p>翻开所有安全格子即可过关。数字表示周围 8 格内的地雷数量。</p>
                         <p>❤️ 生命值上限 3，踩到红雷扣 1 命（扣 50 × 倍率 分），归零则游戏结束。</p>
-                        <p>🚩 长按或右键可标旗标记疑似地雷。双击已翻开数字格可触发和弦操作（周围标旗数等于数字时自动翻开其余格）。</p>
+                        <p>🚩 标旗模式可在设置中切换（推荐“长按标旗”）。右键也可标旗。双击/点击已翻开数字格可触发和弦操作（周围标旗数等于数字时自动翻开其余格）。</p>
                     </section>
                     <section>
                         <h3>💣 蓝雷（第 6 关起）</h3>
@@ -158,9 +202,9 @@
                         <h3>🎭 修饰器</h3>
                         <p>每关开始前可选择修饰器，倍率可叠加相乘。每关独立，不会带到下一关。</p>
                         <ul>
-                            <li>🤔 <b>优柔寡断</b>：时间 +200%（180秒），得分 ×0.5 — 适合新手熟悉玩法</li>
+                            <li>🤔 <b>优柔寡断</b>：时间 +200%，得分 ×0.5 — 适合新手熟悉玩法</li>
                             <li>🔥 <b>孤注一掷</b>：生命 = 1，得分 ×1.6 — 一命通关，高风险高回报</li>
-                            <li>⏱️ <b>争分夺秒</b>：时间 -20%（48秒），得分 ×1.3 — 考验速度</li>
+                            <li>⏱️ <b>争分夺秒</b>：时间 -20%，得分 ×1.3 — 考验速度</li>
                             <li>🚫 <b>盲扫大师</b>：禁止标旗，得分 ×1.3 — 纯记忆力挑战</li>
                             <li>🎰 <b>赌徒本能</b>：棋盘半可解（40%–70%可推理，其余需猜），得分 ×1.3 — 推理与运气并存</li>
                         </ul>
@@ -175,7 +219,7 @@
                             <tr style="border-bottom:1px solid #30363D;"><td>L18–22</td><td>8×8</td><td>17–21雷</td><td>27–33%</td></tr>
                             <tr><td>L23+</td><td>8×8</td><td>21–24雷</td><td>33–38%</td></tr>
                         </table>
-                        <p>所有关卡基础时间 60 秒。难度通过棋盘大小、雷密度、蓝雷惩罚和速推窗口收紧逐步提升。</p>
+                        <p>基础时间按棋盘递增：6×6 = 60秒，7×7 = 70秒，8×8 = 85秒。难度通过棋盘大小、雷密度、蓝雷惩罚和速推窗口收紧逐步提升。</p>
                     </section>
                 </div>
             </div>

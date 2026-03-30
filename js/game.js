@@ -15,7 +15,25 @@ function getLevelConfig(level) {
     return { w: 8, h: 8, mines: Math.min(level - 2, 24)                  };  // 21→24  → 33-38%
 }
 
-const BASE_TIME = 60; // 所有关卡统一60秒
+// 基础时间（按棋盘大小）
+function getBaseTime(level) {
+    const cfg = getLevelConfig(level);
+    if (cfg.w >= 8) return 85;
+    if (cfg.w >= 7) return 70;
+    return 60;
+}
+
+// ==================== 设置 ====================
+const SETTINGS_KEY = 'scanboom_settings';
+function loadSettings() {
+    try {
+        const d = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+        return { flagMode: 'longPress', sound: true, vibration: true, ...d };
+    } catch { return { flagMode: 'longPress', sound: true, vibration: true }; }
+}
+function saveSettings(s) {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+}
 
 // 链式时间奖励（弱化：只有大片翻开才给）
 function getChainTimeBonus(chainLen) {
@@ -99,6 +117,7 @@ class Game {
         this.combo = 0;
         this.courageCnt = 0; // 本轮对局勇气时刻次数
         this.records = loadRecords();
+        this.settings = loadSettings();
 
         // 单关状态
         this.state = 'idle'; // idle | playing | paused | courage | ended
@@ -155,6 +174,9 @@ class Game {
             aboutBtn:       document.getElementById('aboutBtn'),
             aboutOverlay:   document.getElementById('aboutOverlay'),
             aboutCloseBtn:  document.getElementById('aboutCloseBtn'),
+            settingsBtn:    document.getElementById('settingsBtn'),
+            settingsOverlay: document.getElementById('settingsOverlay'),
+            settingsCloseBtn: document.getElementById('settingsCloseBtn'),
         };
 
         this.audioCtx = null;
@@ -171,12 +193,62 @@ class Game {
         let lastClickTime = 0;
         let lastClickPos = null;
 
+        // Long press state
+        let longPressTimer = null;
+        let longPressTriggered = false;
+        let touchStartPos = null;
+
         this.canvas.addEventListener('touchstart', e => {
-            e.preventDefault(); touched = true;
+            e.preventDefault();
+            touched = true;
+
+            if (this.settings.flagMode === 'longPress') {
+                const t = e.touches[0];
+                if (!t) return;
+                touchStartPos = { clientX: t.clientX, clientY: t.clientY };
+                longPressTriggered = false;
+                const r = this.canvas.getBoundingClientRect();
+
+                longPressTimer = setTimeout(() => {
+                    longPressTriggered = true;
+                    const px = touchStartPos.clientX - r.left;
+                    const py = touchStartPos.clientY - r.top;
+                    const pos = this.renderer.hitTest(px, py);
+                    if (pos) {
+                        this._doFlag(pos);
+                        this._vibrate(30);
+                    }
+                }, 400);
+            }
         }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', e => {
+            if (longPressTimer && touchStartPos) {
+                const t = e.touches[0];
+                if (t) {
+                    const dx = t.clientX - touchStartPos.clientX;
+                    const dy = t.clientY - touchStartPos.clientY;
+                    if (dx * dx + dy * dy > 100) {
+                        clearTimeout(longPressTimer);
+                        longPressTimer = null;
+                    }
+                }
+            }
+        }, { passive: true });
 
         this.canvas.addEventListener('touchend', e => {
             e.preventDefault();
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            if (longPressTriggered) {
+                longPressTriggered = false;
+                setTimeout(() => { touched = false; }, 300);
+                return;
+            }
+
             const t = e.changedTouches[0];
             if (!t) return;
             const r = this.canvas.getBoundingClientRect();
@@ -231,6 +303,7 @@ class Game {
 
         // 标旗模式切换
         this.el.flagBtn.addEventListener('click', () => {
+            if (this.activeMods.has('noFlag')) return;
             this.flagMode = !this.flagMode;
             this.el.flagBtn.textContent = this.flagMode ? '🚩' : '⛏️';
             this.el.flagBtn.classList.toggle('active', this.flagMode);
@@ -244,6 +317,27 @@ class Game {
         // 关于按钮
         this.el.aboutBtn.addEventListener('click', () => this._toggleAbout());
         this.el.aboutCloseBtn.addEventListener('click', () => this._toggleAbout());
+
+        // 设置按钮
+        this.el.settingsBtn.addEventListener('click', () => this._toggleSettings());
+        this.el.settingsCloseBtn.addEventListener('click', () => this._toggleSettings());
+
+        // 设置项变更
+        document.querySelectorAll('input[name="flagMode"]').forEach(radio => {
+            radio.addEventListener('change', e => {
+                this.settings.flagMode = e.target.value;
+                saveSettings(this.settings);
+                this._applyFlagMode();
+            });
+        });
+        document.getElementById('soundToggle').addEventListener('change', e => {
+            this.settings.sound = e.target.checked;
+            saveSettings(this.settings);
+        });
+        document.getElementById('vibrationToggle').addEventListener('change', e => {
+            this.settings.vibration = e.target.checked;
+            saveSettings(this.settings);
+        });
 
         // 结算按钮
         this.el.nextBtn.addEventListener('click', () => {
@@ -269,6 +363,8 @@ class Game {
             this._confirmModifiers();
         });
 
+        // 初始化设置UI
+        this._applySettingsUI();
     }
 
     // ==================== 修饰器选择 ====================
@@ -375,7 +471,7 @@ class Game {
         this.renderer.setBoard(this.board);
 
         // 修饰器: 优柔寡断 → 时间+200%
-        let timeBase = BASE_TIME;
+        let timeBase = getBaseTime(this.level);
         if (this.activeMods.has('chill')) timeBase = timeBase * 3;
 
         // 修饰器: 争分夺秒 → 时间-20%
@@ -436,6 +532,15 @@ class Game {
             this._initAudio();
         }
 
+        // 长按标旗模式：点击已标旗格取消标旗
+        if (this.settings.flagMode === 'longPress' && !this.flagMode) {
+            const c = this.board.cell(pos.x, pos.y);
+            if (c && c.flagged) {
+                this._doFlag(pos);
+                return;
+            }
+        }
+
         if (this.flagMode) {
             this._doFlag(pos);
             return;
@@ -451,9 +556,10 @@ class Game {
             this.state = 'playing';
             this.lastTick = performance.now();
             this.el.hint.classList.add('hidden');
+            this._initAudio();
         }
         const ok = this.board.toggleFlag(pos.x, pos.y);
-        if (ok && this.flagMode) {
+        if (ok && this.flagMode && this.settings.flagMode === 'auto') {
             this.flagMode = false;
             this.el.flagBtn.textContent = '⛏️';
             this.el.flagBtn.classList.remove('active');
@@ -520,6 +626,7 @@ class Game {
 
             this.renderer.animateExplosion(result.x, result.y, '#58A6FF');
             this._playSound('blueMine');
+            this._vibrate(50);
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`⏱️-${timeLoss}s`, px, py, '#58A6FF');
@@ -536,6 +643,7 @@ class Game {
 
             this.renderer.animateExplosion(result.x, result.y);
             this._playSound('boom');
+            this._vibrate(100);
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`-${penalty}`, px, py, '#F85149');
@@ -745,11 +853,13 @@ class Game {
             this._uiLives();
             this.renderer.animateVictory();
             this._playSound('win');
+            this._vibrate([30, 20, 30]);
         } else if (reason === 'time') {
             // 时间到：雷依次翻出 + 全屏爆炸
             const mines = this.board.revealMines();
             if (mines.length > 0) this.renderer.animateTimeoutExplosion(mines);
             this._playSound('timeout');
+            this._vibrate([100, 50, 100]);
         } else {
             const mines = this.board.revealMines();
             if (mines.length > 0) this.renderer.animateRevealMines(mines);
@@ -901,6 +1011,7 @@ class Game {
     }
 
     _playSound(type, count) {
+        if (!this.settings.sound) return;
         this._initAudio();
         const ctx = this.audioCtx;
         if (!ctx) return;
@@ -1023,6 +1134,43 @@ class Game {
             bg.gain.setValueAtTime(0.2, bs);
             bg.gain.exponentialRampToValueAtTime(0.001, bs + 0.5);
             bass.start(bs); bass.stop(bs + 0.6);
+        }
+    }
+
+    // ==================== 设置 ====================
+
+    _toggleSettings() {
+        const active = this.el.settingsOverlay.classList.toggle('active');
+        if (active && this.state === 'playing') {
+            this._prevStateSettings = 'playing';
+            this.state = 'paused';
+        } else if (!active && this._prevStateSettings) {
+            this.state = this._prevStateSettings;
+            this.lastTick = performance.now();
+            this._prevStateSettings = null;
+        }
+        if (active) this._applySettingsUI();
+    }
+
+    _applyFlagMode() {
+        this.flagMode = false;
+        this.el.flagBtn.textContent = '⛏️';
+        this.el.flagBtn.classList.remove('active');
+        this.renderer.flagMode = false;
+    }
+
+    _applySettingsUI() {
+        const r = document.querySelector(`input[name="flagMode"][value="${this.settings.flagMode}"]`);
+        if (r) r.checked = true;
+        const s = document.getElementById('soundToggle');
+        if (s) s.checked = this.settings.sound;
+        const v = document.getElementById('vibrationToggle');
+        if (v) v.checked = this.settings.vibration;
+    }
+
+    _vibrate(pattern) {
+        if (this.settings.vibration && navigator.vibrate) {
+            navigator.vibrate(pattern);
         }
     }
 

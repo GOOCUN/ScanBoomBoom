@@ -352,3 +352,99 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 .about-body ul { padding-left: 18px; margin: 4px 0; }
 .about-body li { margin-bottom: 2px; }
 
+/* ---- 设置按钮 ---- */
+.settings-btn {
+    background: none; border: none; color: #6E7681;
+    font-size: 16px; cursor: pointer; padding: 2px 4px;
+    transition: color .15s; flex-shrink: 0;
+}
+.settings-btn:hover { color: #C9D1D9; }
+
+/* ---- 设置叠层 ---- */
+.settings-overlay {
+    position: fixed; inset: 0; z-index: 295;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,17,23,.96); backdrop-filter: blur(12px);
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.settings-overlay.active { opacity: 1; pointer-events: auto; }
+.settings-content {
+    width: 92%; max-width: 380px; max-height: 80vh;
+    background: #161B22; border: 1px solid #30363D; border-radius: 16px;
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.settings-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid #21262D;
+}
+.settings-title { font-size: 18px; font-weight: 800; color: #C9D1D9; }
+.settings-close {
+    background: none; border: none; color: #8B949E; font-size: 18px;
+    cursor: pointer; padding: 4px 8px; transition: color .15s;
+}
+.settings-close:hover { color: #F85149; }
+.settings-body {
+    padding: 16px 18px; overflow-y: auto;
+}
+.settings-group {
+    margin-bottom: 20px;
+}
+.settings-group-title {
+    font-size: 14px; font-weight: 700; color: #C9D1D9; margin-bottom: 10px;
+}
+.settings-radio {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px 12px; margin-bottom: 6px; border-radius: 10px;
+    background: #0D1117; border: 1.5px solid #30363D;
+    cursor: pointer; transition: all .15s;
+}
+.settings-radio:has(input:checked) {
+    border-color: #58A6FF; background: #0D1117;
+    box-shadow: 0 0 8px rgba(88,166,255,.15);
+}
+.settings-radio input[type="radio"] {
+    accent-color: #58A6FF; width: 16px; height: 16px; flex-shrink: 0;
+}
+.settings-radio .radio-label {
+    font-size: 14px; font-weight: 600; color: #C9D1D9; flex: 1;
+}
+.settings-radio .radio-desc {
+    width: 100%; font-size: 11px; color: #6E7681; padding-left: 24px;
+    margin-top: -4px;
+}
+.recommend-tag {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    color: #238636; background: rgba(35,134,54,.15);
+    padding: 1px 6px; border-radius: 4px; margin-left: 4px;
+    vertical-align: middle;
+}
+.settings-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid #21262D;
+    cursor: pointer;
+}
+.settings-toggle:last-child { border-bottom: none; }
+.settings-toggle span:first-child {
+    font-size: 14px; color: #C9D1D9;
+}
+.settings-toggle input[type="checkbox"] {
+    display: none;
+}
+.toggle-slider {
+    width: 44px; height: 24px; border-radius: 12px;
+    background: #30363D; position: relative;
+    transition: background .2s; flex-shrink: 0;
+}
+.toggle-slider::after {
+    content: '';
+    position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #C9D1D9; transition: transform .2s;
+}
+.settings-toggle input:checked + .toggle-slider {
+    background: #238636;
+}
+.settings-toggle input:checked + .toggle-slider::after {
+    transform: translateX(20px);
+}
+
