@@ -40,6 +40,10 @@ class Renderer {
         this.jokerReverts = [];
         this.jokerFlash = null;
 
+        // 岩浆雷溅射动画
+        this.magmaSplashes = [];
+        this.magmaFlash = null;
+
         // 配色
         this.C = {
             hidden:   '#2A313A',
@@ -68,6 +72,8 @@ class Renderer {
         this.timeoutFlash = null;
         this.jokerReverts = [];
         this.jokerFlash = null;
+        this.magmaSplashes = [];
+        this.magmaFlash = null;
         this.canvas.style.transform = '';
         this.resize();
     }
@@ -170,6 +176,31 @@ class Renderer {
         this.shakeEnd = now + 800;
         this.shakeDur = 800;
         this.shakeAmp = 10;
+    }
+
+    animateMagmaSplash(ox, oy, cells) {
+        const now = performance.now();
+        this.magmaSplashes = [];
+        for (let i = 0; i < cells.length; i++) {
+            this.magmaSplashes.push({
+                x: cells[i].x, y: cells[i].y,
+                mine: cells[i].mine,
+                start: now + 200,
+                delay: i * 100,
+                dur: 400
+            });
+            // 溅射翻开动画
+            this.reveals.push({
+                x: cells[i].x, y: cells[i].y,
+                start: now + 200,
+                delay: i * 100,
+                dur: 250
+            });
+        }
+        this.magmaFlash = { start: now + 200, dur: 800 };
+        this.shakeEnd = Math.max(this.shakeEnd, now + 600);
+        this.shakeDur = 600;
+        this.shakeAmp = Math.max(this.shakeAmp, 10);
     }
 
     // ==================== 主绘制 ====================
@@ -324,6 +355,36 @@ class Renderer {
                 this.jokerFlash = null;
             }
         }
+
+        // 岩浆雷溅射橙色闪光（每格）
+        for (let i = this.magmaSplashes.length - 1; i >= 0; i--) {
+            const a = this.magmaSplashes[i];
+            const t = this._progress(a, now);
+            if (t >= 1) { this.magmaSplashes.splice(i, 1); continue; }
+            if (t < 0) continue;
+            const rpx = a.x * (this.cellSize + this.gap);
+            const rpy = a.y * (this.cellSize + this.gap);
+            ctx.save();
+            ctx.globalAlpha = 0.6 * Math.sin(t * Math.PI);
+            ctx.fillStyle = a.mine ? '#F85149' : '#F0883E';
+            this._roundRect(ctx, rpx, rpy, this.cellSize, this.cellSize, 4);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 岩浆雷全屏橙色脉冲
+        if (this.magmaFlash) {
+            const t = (now - this.magmaFlash.start) / this.magmaFlash.dur;
+            if (t >= 0 && t < 1) {
+                ctx.save();
+                ctx.globalAlpha = 0.2 * (1 - t);
+                ctx.fillStyle = '#F0883E';
+                ctx.fillRect(0, 0, this.boardW, this.boardH);
+                ctx.restore();
+            } else if (t >= 1) {
+                this.magmaFlash = null;
+            }
+        }
     }
 
     // ==================== 绘制方法 ====================
@@ -375,7 +436,7 @@ class Renderer {
 
         const cx = px + this.cellSize / 2, cy = py + this.cellSize / 2;
         if (cell.mine) {
-            ctx.fillStyle = cell.blue ? '#58A6FF' : this.C.mine;
+            ctx.fillStyle = cell.magma ? '#F0883E' : cell.blue ? '#58A6FF' : this.C.mine;
             ctx.beginPath();
             ctx.arc(cx, cy, this.cellSize * 0.22, 0, Math.PI * 2);
             ctx.fill();

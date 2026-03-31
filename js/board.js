@@ -23,6 +23,7 @@ class Board {
         this.totalSafe = width * height - mineCount;
         this.blueMineRatio = 0;
         this.jokerMineCount = 0;
+        this.magmaMineCount = 0;
         this._stateVersion = 0;
         this._initCells();
     }
@@ -33,7 +34,7 @@ class Board {
             this.cells[i] = {
                 x: i % this.width,
                 y: (i / this.width) | 0,
-                mine: false, blue: false, joker: false, adj: 0,
+                mine: false, blue: false, joker: false, magma: false, adj: 0,
                 revealed: false, flagged: false,
             };
         }
@@ -63,6 +64,7 @@ class Board {
                 this.seed = this.seed + attempt;
                 if (this.blueMineRatio > 0) this._assignBlueMines();
                 if (this.jokerMineCount > 0) this._assignJokerMines();
+                if (this.magmaMineCount > 0) this._assignMagmaMines();
                 return;
             }
             if (ratio > bestScore) {
@@ -82,6 +84,7 @@ class Board {
         this.generated = true;
         if (this.blueMineRatio > 0) this._assignBlueMines();
         if (this.jokerMineCount > 0) this._assignJokerMines();
+        if (this.magmaMineCount > 0) this._assignMagmaMines();
     }
 
     _assignBlueMines() {
@@ -103,6 +106,43 @@ class Board {
         }
         const count = Math.min(this.jokerMineCount, candidates.length);
         for (let i = 0; i < count; i++) candidates[i].joker = true;
+    }
+
+    _assignMagmaMines() {
+        const candidates = this.cells.filter(c => c.mine && !c.blue && !c.joker);
+        for (let i = candidates.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+        const count = Math.min(this.magmaMineCount, candidates.length);
+        for (let i = 0; i < count; i++) candidates[i].magma = true;
+    }
+
+    /** 岩浆雷溅射：半径2内随机揭开3-5格 */
+    splashReveal(x, y) {
+        const candidates = [];
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                if (!dx && !dy) continue;
+                const c = this.cell(x + dx, y + dy);
+                if (c && !c.revealed) candidates.push(c);
+            }
+        }
+        for (let i = candidates.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+        const pick = Math.min(3 + (Math.random() * 3 | 0), candidates.length);
+        const result = [];
+        for (let i = 0; i < pick; i++) {
+            const c = candidates[i];
+            if (c.flagged) c.flagged = false;
+            c.revealed = true;
+            if (!c.mine) this.revealedSafe++;
+            result.push({ x: c.x, y: c.y, mine: c.mine });
+        }
+        if (result.length > 0) this._stateVersion++;
+        return result;
     }
 
     _placeMines(safeX, safeY, seed) {

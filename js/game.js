@@ -71,10 +71,12 @@ function getBlueTimePenalty(level) {
     return 1 / 2;
 }
 
-// 小丑雷数量（按关卡）
-function getJokerMineCount(level) {
-    if (level < 8) return 0;
-    return 1;
+// 特殊雷分配（L6+：小丑雷或岩浆雷随机出现一种）
+function getSpecialMine(level) {
+    if (level < 6) return { joker: 0, magma: 0 };
+    return Math.random() < 0.5
+        ? { joker: 1, magma: 0 }
+        : { joker: 0, magma: 1 };
 }
 
 // ==================== 存档 ====================
@@ -203,6 +205,7 @@ class Game {
             restart:        document.getElementById('restartBtn'),
             modOverlay:     document.getElementById('modifierOverlay'),
             modList:        document.getElementById('modifierList'),
+            modDots:        document.getElementById('modifierDots'),
             modMult:        document.getElementById('modifierMult'),
             modLevel:       document.getElementById('modifierLevel'),
             modStartBtn:    document.getElementById('modifierStartBtn'),
@@ -458,7 +461,9 @@ class Game {
         const shown = [...alwaysKeys, ...poolKeys.slice(0, 3)];
 
         this.el.modList.innerHTML = '';
-        for (const key of shown) {
+        this.el.modDots.innerHTML = '';
+        for (let idx = 0; idx < shown.length; idx++) {
+            const key = shown[idx];
             const m = MODIFIERS[key];
             const card = document.createElement('div');
             card.className = 'modifier-card';
@@ -474,13 +479,33 @@ class Game {
                 card.classList.toggle('selected');
                 if (card.classList.contains('selected')) {
                     this.activeMods.add(key);
+                    this._playSound('modSelect');
                 } else {
                     this.activeMods.delete(key);
+                    this._playSound('modDeselect');
                 }
                 this._updateModMult();
             });
             this.el.modList.appendChild(card);
+
+            // dot indicator
+            const dot = document.createElement('span');
+            dot.className = 'dot' + (idx === 0 ? ' active' : '');
+            this.el.modDots.appendChild(dot);
         }
+
+        // Scroll snap dot sync
+        this.el.modList.scrollLeft = 0;
+        this.el.modList.onscroll = () => {
+            const scrollLeft = this.el.modList.scrollLeft;
+            const cardW = this.el.modList.firstElementChild?.offsetWidth || 140;
+            const gap = 12;
+            const idx = Math.round(scrollLeft / (cardW + gap));
+            const dots = this.el.modDots.children;
+            for (let i = 0; i < dots.length; i++) {
+                dots[i].classList.toggle('active', i === idx);
+            }
+        };
 
         this.el.modOverlay.classList.add('active');
     }
@@ -649,9 +674,11 @@ class Game {
         const seed = Date.now() ^ ((Math.random() * 0xFFFFFFFF) | 0);
         this.board = new Board(cfg.w, cfg.h, cfg.mines, seed);
 
-        // 蓝雷
+        // 蓝雷 + 特殊雷
         this.board.blueMineRatio = getBlueMineRatio(this.level);
-        this.board.jokerMineCount = getJokerMineCount(this.level);
+        const special = getSpecialMine(this.level);
+        this.board.jokerMineCount = special.joker;
+        this.board.magmaMineCount = special.magma;
 
         this.renderer.setBoard(this.board);
 
@@ -811,6 +838,7 @@ class Game {
         const cell = this.board.cell(result.x, result.y);
         const isBlue = cell && cell.blue;
         const isJoker = cell && cell.joker;
+        const isMagma = cell && cell.magma;
 
         this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
 
@@ -838,6 +866,41 @@ class Game {
 
             this._uiCombo();
             this._uiMineCount();
+        } else if (isMagma) {
+            // 岩浆雷：扣命 + 扣分 + 溅射
+            this.lives--;
+            const magmaPenalty = 50 * Math.pow(2, this.hitMines - 1);
+            this.totalScore = Math.max(0, this.totalScore - magmaPenalty);
+            this.scoreBreakdown.penalty += magmaPenalty;
+
+            // 溅射揭开
+            const splashed = this.board.splashReveal(result.x, result.y);
+
+            this._uiLives();
+            this._uiScore();
+            this._uiCombo();
+
+            this.renderer.animateExplosion(result.x, result.y, '#F0883E');
+            this.renderer.animateMagmaSplash(result.x, result.y, splashed);
+            this._playSound('magma');
+            this._haptic('mine');
+
+            const { px: mpx, py: mpy } = this._boardToFloat(result.x, result.y);
+            this.floats.spawn('\uD83C\uDF0B \u5CA9\u6D46!', mpx, mpy, '#F0883E', true);
+            this.floats.spawn(`-${magmaPenalty}`, mpx, mpy - 28, '#F0883E');
+            if (splashed.length > 0) {
+                const mineHits = splashed.filter(s => s.mine).length;
+                let splashMsg = `\u6EB6\u5C04 ${splashed.length}\u683C`;
+                if (mineHits > 0) splashMsg += ` \uD83D\uDCA5${mineHits}`;
+                this.floats.spawn(splashMsg, mpx, mpy - 56, '#F0883E');
+            }
+
+            this._uiMineCount();
+            if (this.lives <= 0) this._endGame('dead');
+            else if (this.board.isComplete()) {
+                this._applyWinBonus();
+                this._endGame('win');
+            }
         } else if (isBlue) {
             // 蓝雷：按关卡扣时间，不扣命
             const timeLoss = Math.ceil(this.time * getBlueTimePenalty(this.level));
@@ -1306,15 +1369,31 @@ class Game {
 
         if (type === 'pop') {
             const n = Math.min(count || 1, 15);
-            for (let i = 0; i < n; i++) {
-                const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.value = 600 + i * 80 + this.combo * 8;
-                const s = t + i * 0.03;
-                g.gain.setValueAtTime(0.06, s);
-                g.gain.exponentialRampToValueAtTime(0.001, s + 0.07);
-                osc.start(s); osc.stop(s + 0.09);
+            if (n >= 5) {
+                // 连锁音阶：do-re-mi-fa-sol 上行（C大调宫调式）
+                const scale = [523, 587, 659, 698, 784, 880, 988, 1047];
+                for (let i = 0; i < n; i++) {
+                    const osc = ctx.createOscillator(), g = ctx.createGain();
+                    osc.connect(g); g.connect(ctx.destination);
+                    osc.type = 'sine';
+                    const noteIdx = Math.min(i, scale.length - 1);
+                    osc.frequency.value = scale[noteIdx] + this.combo * 4;
+                    const s = t + i * 0.04;
+                    g.gain.setValueAtTime(0.07, s);
+                    g.gain.exponentialRampToValueAtTime(0.001, s + 0.1);
+                    osc.start(s); osc.stop(s + 0.12);
+                }
+            } else {
+                for (let i = 0; i < n; i++) {
+                    const osc = ctx.createOscillator(), g = ctx.createGain();
+                    osc.connect(g); g.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.value = 600 + i * 80 + this.combo * 8;
+                    const s = t + i * 0.03;
+                    g.gain.setValueAtTime(0.06, s);
+                    g.gain.exponentialRampToValueAtTime(0.001, s + 0.07);
+                    osc.start(s); osc.stop(s + 0.09);
+                }
             }
         } else if (type === 'boom') {
             const osc = ctx.createOscillator(), g = ctx.createGain();
@@ -1440,6 +1519,56 @@ class Game {
             bg.gain.setValueAtTime(0.2, bs);
             bg.gain.exponentialRampToValueAtTime(0.001, bs + 0.5);
             bass.start(bs); bass.stop(bs + 0.6);
+        } else if (type === 'magma') {
+            // 岩浆雷：低频轰鸣 + 气泡上升音
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
+            g.gain.setValueAtTime(0.15, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+            osc.start(t); osc.stop(t + 0.4);
+            // 气泡上升
+            for (let i = 0; i < 3; i++) {
+                const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+                o2.connect(g2); g2.connect(ctx.destination);
+                o2.type = 'sine';
+                const s = t + 0.1 + i * 0.08;
+                o2.frequency.setValueAtTime(300 + i * 150, s);
+                o2.frequency.exponentialRampToValueAtTime(600 + i * 200, s + 0.1);
+                g2.gain.setValueAtTime(0.06, s);
+                g2.gain.exponentialRampToValueAtTime(0.001, s + 0.12);
+                o2.start(s); o2.stop(s + 0.15);
+            }
+        } else if (type === 'modSelect') {
+            // 金属锁扣 "咔"：短促高频 + 低频撞击
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1800, t);
+            osc.frequency.exponentialRampToValueAtTime(800, t + 0.04);
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+            osc.start(t); osc.stop(t + 0.08);
+            // 低频撞击
+            const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
+            osc2.connect(g2); g2.connect(ctx.destination);
+            osc2.type = 'sine';
+            osc2.frequency.value = 200;
+            g2.gain.setValueAtTime(0.08, t + 0.02);
+            g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+            osc2.start(t + 0.02); osc2.stop(t + 0.1);
+        } else if (type === 'modDeselect') {
+            // 轻弹回 "嘀"：短促下降音
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1000, t);
+            osc.frequency.exponentialRampToValueAtTime(400, t + 0.06);
+            g.gain.setValueAtTime(0.07, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+            osc.start(t); osc.stop(t + 0.1);
         }
     }
 

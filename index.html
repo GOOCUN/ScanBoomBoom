@@ -116,6 +116,7 @@
                 <div class="modifier-title">选择挑战修饰器</div>
                 <div class="modifier-subtitle">可叠加 · 倍率相乘</div>
                 <div id="modifierList" class="modifier-list"></div>
+                <div id="modifierDots" class="modifier-dots"></div>
                 <div class="modifier-mult">得分倍率 <span id="modifierMult">×1.0</span></div>
                 <button id="modifierStartBtn" class="btn-primary">开始挑战</button>
                 <button id="modifierHomeBtn" class="btn-tertiary" style="margin-top:8px;width:auto">🏠 回主菜单</button>
@@ -184,7 +185,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.4</small></span>
+                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.6</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
@@ -205,13 +206,24 @@
                         </ul>
                     </section>
                     <section>
-                        <h3>🤡 小丑雷（第 8 关起）</h3>
+                        <h3>🤡 小丑雷（第 6 关起）</h3>
                         <p>踩到小丑雷不扣命、不扣时间，但会造成混乱：</p>
                         <ul>
                             <li>清除棋盘上所有旗帜 🚩</li>
                             <li>随机回退 50% 已翻开的安全格（需重新翻开）</li>
                         </ul>
                         <p>小丑雷触发后会变为普通雷（可能变蓝雷），但不消耗生命。</p>
+                    </section>
+                    <section>
+                        <h3>🌋 岩浆雷（第 6 关起）</h3>
+                        <p>踩到岩浆雷会引发溅射爆炸：</p>
+                        <ul>
+                            <li>扣 1 条命 + 递增扣分（与其他雷共享计数）</li>
+                            <li>以踩雷位置为中心，半径 2 格范围内随机揭开 3–5 格</li>
+                            <li>溅射到的安全格会被翻开（不得分、不触发连锁）</li>
+                            <li>溅射到的雷会被揭露位置（仅爆炸特效，不额外扣分扣命）</li>
+                            <li>溅射会清除被揭开格子上的旗帜</li>
+                        </ul>
                     </section>
                     <section>
                         <h3>💯 得分机制</h3>
@@ -261,7 +273,7 @@
                             <tr style="border-bottom:1px solid #30363D;"><td>L8–12</td><td>7×9</td><td>11–15雷</td><td>17–24%</td><td>80s</td></tr>
                             <tr><td>L13–25</td><td>8×10</td><td>14–20雷</td><td>18–25%</td><td>95s</td></tr>
                         </table>
-                        <p>第 6 关起出现蓝雷，第 8 关起出现小丑雷。难度通过棋盘大小、雷密度、蓝雷惩罚和速推窗口收紧逐步提升。通关第 25 关即为全部通关！</p>
+                        <p>第 6 关起出现蓝雷，同时随机出现小丑雷或岩浆雷（每关只出现一种）。难度通过棋盘大小、雷密度、蓝雷惩罚和速推窗口收紧逐步提升。通关第 25 关即为全部通关！</p></p>
                     </section>
                 </div>
             </div>
