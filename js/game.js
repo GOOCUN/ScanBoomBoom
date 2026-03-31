@@ -4,22 +4,22 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
-// ==================== 关卡配置 ====================
-// 雷密度保底 ≥17%，避免首击连锁铺满全图
+// ==================== 关卡配置（25关） ====================
+// 雷密度 17-25%，棋盘渐进 6×6 → 8×10
 function getLevelConfig(level) {
-    if (level <= 3)  return { w: 6, h: 6, mines: 5 + level               };  // 6,7,8   → 17-22%
-    if (level <= 7)  return { w: 6, h: 6, mines: 5 + level               };  // 9,10,11,12 → 25-33%
-    if (level <= 12) return { w: 7, h: 7, mines: 3 + level               };  // 11,12,13,14,15 → 22-31%
-    if (level <= 17) return { w: 7, h: 7, mines: Math.min(2 + level, 18) };  // 15,16,17,18,18 → 31-37%
-    if (level <= 22) return { w: 8, h: 8, mines: level - 1               };  // 17,18,19,20,21 → 27-33%
-    return { w: 8, h: 8, mines: Math.min(level - 2, 24)                  };  // 21→24  → 33-38%
+    level = Math.min(level, 25);
+    if (level <= 3)  return { w: 6, h: 6,  mines: 5 + level            };  // 6,7,8   → 17-22%
+    if (level <= 7)  return { w: 6, h: 8,  mines: 5 + level            };  // 9,10,11,12 → 19-25%
+    if (level <= 12) return { w: 7, h: 9,  mines: 3 + level            };  // 11,12,13,14,15 → 17-24%
+    return             { w: 8, h: 10, mines: Math.min(level + 1, 20)   };  // 14→20 → 18-25%
 }
 
 // 基础时间（按棋盘大小）
 function getBaseTime(level) {
     const cfg = getLevelConfig(level);
-    if (cfg.w >= 8) return 85;
-    if (cfg.w >= 7) return 70;
+    if (cfg.h >= 10) return 95;
+    if (cfg.h >= 9)  return 80;
+    if (cfg.h >= 8)  return 70;
     return 60;
 }
 
@@ -55,7 +55,6 @@ const MODIFIERS = {
     allIn:   { icon: '🔥', name: '孤注一掷', desc: '生命值=1',              mult: 1.6 },
     rush:    { icon: '⏱️', name: '争分夺秒', desc: '时间缩短20%',           mult: 1.3 },
     noFlag:  { icon: '🚫', name: '盲扫大师', desc: '无法标旗',              mult: 1.3 },
-    gambler: { icon: '🎰', name: '赌徒本能', desc: '本局必出死棋',          mult: 1.3 },
 };
 
 // 蓝雷比例（按关卡）
@@ -70,6 +69,12 @@ function getBlueTimePenalty(level) {
     if (level <= 10) return 1 / 4;
     if (level <= 17) return 1 / 3;
     return 1 / 2;
+}
+
+// 小丑雷数量（按关卡）
+function getJokerMineCount(level) {
+    if (level < 8) return 0;
+    return 1;
 }
 
 // ==================== 存档 ====================
@@ -167,6 +172,7 @@ class Game {
             timer:          document.getElementById('timer'),
             timeBarFill:    document.getElementById('timeBarFill'),
             modBadge:       document.getElementById('modBadge'),
+            mineCount:      document.getElementById('mineCount'),
             score:          document.getElementById('score'),
             hint:           document.getElementById('hint'),
             comboText:      document.getElementById('comboText'),
@@ -645,9 +651,7 @@ class Game {
 
         // 蓝雷
         this.board.blueMineRatio = getBlueMineRatio(this.level);
-
-        // 修饰器: 赌徒 → 强制死棋
-        if (this.activeMods.has('gambler')) this.board.forceUnsolvable = true;
+        this.board.jokerMineCount = getJokerMineCount(this.level);
 
         this.renderer.setBoard(this.board);
 
@@ -667,7 +671,6 @@ class Game {
         this.lastTick = 0;
         this.levelScore = 0;
         this.hitMines = 0;
-        this.consecutiveCourage = 0;
 
         // 分数明细跟踪
         this.scoreBreakdown = {
@@ -751,6 +754,7 @@ class Game {
             this._initAudio();
         }
         const ok = this.board.toggleFlag(pos.x, pos.y);
+        if (ok) this._uiMineCount();
         if (ok && this.flagMode && this.settings.flagMode === 'auto') {
             this.flagMode = false;
             this.el.flagBtn.textContent = '⛏️';
@@ -806,14 +810,43 @@ class Game {
 
         const cell = this.board.cell(result.x, result.y);
         const isBlue = cell && cell.blue;
+        const isJoker = cell && cell.joker;
 
         this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
 
-        if (isBlue) {
+        if (isJoker) {
+            // 小丑雷：清旗 + 回退50%已翻开的格子
+            cell.joker = false;
+            cell.revealed = false;
+            if (this.board.blueMineRatio > 0 && Math.random() < this.board.blueMineRatio) {
+                cell.blue = true;
+            }
+
+            this.board.clearAllFlags();
+            const reverted = this.board.revertRevealedCells(0.5);
+
+            this.renderer.animateExplosion(result.x, result.y, '#BC8CFF');
+            this.renderer.animateJokerRevert(reverted);
+            this._playSound('joker');
+            this._haptic('mine');
+
+            const { px, py } = this._boardToFloat(result.x, result.y);
+            this.floats.spawn('🤡 小丑!', px, py, '#BC8CFF', true);
+            if (reverted.length > 0) {
+                this.floats.spawn(`↩ ${reverted.length}格回退`, px, py - 32, '#BC8CFF');
+            }
+
+            this._uiCombo();
+            this._uiMineCount();
+        } else if (isBlue) {
             // 蓝雷：按关卡扣时间，不扣命
             const timeLoss = Math.ceil(this.time * getBlueTimePenalty(this.level));
             this.time = Math.max(0, this.time - timeLoss);
+            const bluePenalty = 50 * Math.pow(2, this.hitMines - 1);
+            this.totalScore = Math.max(0, this.totalScore - bluePenalty);
+            this.scoreBreakdown.penalty += bluePenalty;
             this._uiTimer();
+            this._uiScore();
             this._uiCombo();
 
             this.renderer.animateExplosion(result.x, result.y, '#58A6FF');
@@ -822,12 +855,14 @@ class Game {
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`⏱️-${timeLoss}s`, px, py, '#58A6FF');
+            this.floats.spawn(`-${bluePenalty}`, px, py - 28, '#58A6FF');
 
+            this._uiMineCount();
             if (this.time <= 0) this._endGame('time');
         } else {
             // 红雷：扣命
             this.lives--;
-            const penalty = 50;
+            const penalty = 50 * Math.pow(2, this.hitMines - 1);
             this.totalScore = Math.max(0, this.totalScore - penalty);
             this.scoreBreakdown.penalty += penalty;
             this._uiLives();
@@ -841,6 +876,7 @@ class Game {
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`-${penalty}`, px, py, '#F85149');
 
+            this._uiMineCount();
             if (this.lives <= 0) this._endGame('dead');
         }
     }
@@ -848,7 +884,6 @@ class Game {
     // ==================== 安全翻开 ====================
 
     _onSafeReveal(cells) {
-        this.consecutiveCourage = 0; // 有推理步骤，重置连续勇气计数
         const n = cells.length;
         this.combo += n;
         const mult = this.combo >= 10 ? 3 : this.combo >= 5 ? 2 : 1;
@@ -922,82 +957,61 @@ class Game {
         const n = cells.length;
         this.combo += n;
         this.courageCnt++;
-
-        const progress = this.board.revealedSafe / this.board.totalSafe;
-
-        // 分数奖励：本关分 × 进度，连续触发递减（中间有推理步骤则重置）
         this._haptic('courage');
-        const decay = Math.pow(0.5, this.consecutiveCourage);
-        this.consecutiveCourage++;
-        const bonusPoints = Math.round(this.levelScore * progress * decay);
+
+        // 固定奖励 1：+30% 总时间
+        const timeRestore = Math.round(this.maxTime * 0.3);
+        this.time = Math.min(this.time + timeRestore, this.maxTime);
+        this._uiTimer();
+
+        // 固定奖励 2：+1命（满血 → +20% 本关分）
+        let lifeMsg = '';
+        if (this.lives < this.MAX_LIVES) {
+            this.lives++;
+            this._uiLives();
+            lifeMsg = '❤️ +1生命';
+        } else {
+            const extraPoints = Math.round(this.levelScore * 0.2);
+            this.totalScore += extraPoints;
+            this.levelScore += extraPoints;
+            this.scoreBreakdown.courageExtra += extraPoints;
+            lifeMsg = `💰 +${extraPoints}分`;
+        }
+
+        // 固定奖励 3：+20% 本关得分
+        const bonusPoints = Math.round(this.levelScore * 0.2);
         this.totalScore += bonusPoints;
         this.levelScore += bonusPoints;
         this.scoreBreakdown.courage += bonusPoints;
-
-        // 生存奖励
-        let survivalMsg = '';
-        if (progress >= 0.6) {
-            // 高进度 → +1命 or 分数
-            if (this.lives < this.MAX_LIVES) {
-                this.lives++;
-                this._uiLives();
-                survivalMsg = '❤️ +1生命';
-            } else {
-                const extraPoints = Math.round(this.levelScore * 0.25);
-                this.totalScore += extraPoints;
-                this.levelScore += extraPoints;
-                this.scoreBreakdown.courageExtra += extraPoints;
-                survivalMsg = `💰 +${extraPoints}分`;
-            }
-        } else {
-            // 低进度 → 回复时间
-            const timeRestore = Math.round(this.maxTime * progress);
-            this.time = Math.min(this.time + timeRestore, this.maxTime);
-            this._uiTimer();
-            survivalMsg = `⏰ +${timeRestore}s`;
-        }
 
         this._uiScore();
         this._uiCombo();
 
         // 翻开动画
         this.renderer.animateReveal(cells);
+        this.renderer.animateCourage(1);
+        this._playSound('courage');
 
         const mid = cells[Math.floor(cells.length / 2)];
         const { px, py } = this._boardToFloat(mid.x, mid.y);
+        this.floats.spawn(`🎲 +${bonusPoints}`, px, py, '#FFD700', true);
+        setTimeout(() => {
+            this.floats.spawn(`⏰+${timeRestore}s`, px, py - 36, '#79C0FF');
+        }, 200);
+        setTimeout(() => {
+            this.floats.spawn(lifeMsg, px, py - 64, '#3FB950');
+        }, 400);
 
-        // 分级反馈
-        if (progress >= 0.4) {
-            // 中高进度：完整特效
-            const intensity = progress >= 0.8 ? 2 : 1;
-            this.renderer.animateCourage(intensity);
-            this._playSound('courage');
-            this.floats.spawn(`🎲 +${bonusPoints}`, px, py, '#FFD700', true);
-            setTimeout(() => {
-                this.floats.spawn(survivalMsg, px, py - 36, '#79C0FF', true);
-            }, 300);
-            this.state = 'courage';
-            this._showCourageOverlay(bonusPoints, survivalMsg, progress);
-        } else {
-            // 低进度：轻反馈，不暂停
-            this._playSound('pop', 3);
-            this.floats.spawn(`🎲 +${bonusPoints}`, px, py, '#F0C040');
-            this.floats.spawn(survivalMsg, px, py - 28, '#79C0FF');
-
-            if (this.board.isComplete()) {
-                this._applyWinBonus();
-                this._endGame('win');
-            }
-        }
+        this.state = 'courage';
+        this._showCourageOverlay(bonusPoints, timeRestore, lifeMsg);
     }
 
-    _showCourageOverlay(bonusPoints, survivalMsg, progress) {
-        this.el.courageScore.textContent = `+${bonusPoints}分 · ${survivalMsg}`;
-        this.el.courageTime.textContent = progress >= 0.8 ? '🔥 勇气爆发！' : '🎲 勇气奖励';
-        if (progress >= 0.6) this._spawnConfetti();
+    _showCourageOverlay(bonusPoints, timeRestore, lifeMsg) {
+        this.el.courageScore.textContent = `+${bonusPoints}分 · ⏰+${timeRestore}s · ${lifeMsg}`;
+        this.el.courageTime.textContent = '🎲 勇气奖励';
+        this._spawnConfetti();
         this.el.courageOverlay.classList.add('active');
 
-        const dur = progress >= 0.6 ? 2500 : 1500;
         setTimeout(() => {
             this.el.courageOverlay.classList.remove('active');
             this.state = 'playing';
@@ -1007,7 +1021,7 @@ class Game {
                 this._applyWinBonus();
                 this._endGame('win');
             }
-        }, dur);
+        }, 2000);
     }
 
     _spawnConfetti() {
@@ -1075,7 +1089,7 @@ class Game {
         }
 
         let isNewRecord = false;
-        const reachedLevel = isWin ? this.level + 1 : this.level;
+        const reachedLevel = isWin ? Math.min(this.level + 1, 25) : this.level;
         if (reachedLevel > this.records.bestLevel || this.totalScore > this.records.bestScore) {
             this.records.bestLevel = Math.max(this.records.bestLevel, reachedLevel);
             this.records.bestScore = Math.max(this.records.bestScore, this.totalScore);
@@ -1088,7 +1102,10 @@ class Game {
             const sb = this.scoreBreakdown;
 
             if (isWin) {
-                this.el.title.textContent = `🎉 第${this.level}关 通关！`;
+                const isFinalLevel = this.level >= 25;
+                this.el.title.textContent = isFinalLevel
+                    ? '🏆 全部通关！'
+                    : `🎉 第${this.level}关 通关！`;
                 // 构建分数明细表
                 let rows = '';
                 rows += this._scoreRow('翻开得分', sb.base);
@@ -1102,11 +1119,17 @@ class Game {
                 if (this.scoreMult > 1) rows += `<div class="score-row score-mult"><span>修饰器倍率</span><span>×${this.scoreMult.toFixed(1)}</span></div>`;
                 rows += '<div class="score-row score-divider"></div>';
                 rows += `<div class="score-row score-total"><span>本关合计</span><span>+${this.levelScore}</span></div>`;
-                if (isWin) rows += `<div class="score-row score-life"><span>❤️ +1 生命</span><span></span></div>`;
+                if (!isFinalLevel) rows += `<div class="score-row score-life"><span>❤️ +1 生命</span><span></span></div>`;
                 this.el.scoreTable.innerHTML = rows;
 
-                this.el.nextBtn.classList.remove('hidden');
-                this.el.restart.textContent = '重新开始';
+                if (isFinalLevel) {
+                    this.el.nextBtn.classList.add('hidden');
+                    this.el.restart.textContent = '再来一次';
+                    clearSave();
+                } else {
+                    this.el.nextBtn.classList.remove('hidden');
+                    this.el.restart.textContent = '重新开始';
+                }
             } else {
                 this.el.title.textContent = reason === 'time' ? '💥 时间到，雷爆了！' : '💥 游戏结束';
                 // 失败统计
@@ -1150,7 +1173,7 @@ class Game {
     // ==================== UI ====================
 
     _uiAll() {
-        this._uiLives(); this._uiScore(); this._uiTimer(); this._uiLevel(); this._uiCombo();
+        this._uiLives(); this._uiScore(); this._uiTimer(); this._uiLevel(); this._uiCombo(); this._uiMineCount();
     }
 
     _uiLives() {
@@ -1198,6 +1221,17 @@ class Game {
         } else {
             this.el.comboText.classList.remove('active', 'hot', 'fire');
         }
+    }
+
+    _uiMineCount() {
+        if (!this.board) { this.el.mineCount.textContent = '💣 0'; return; }
+        let flagged = 0, revealedMines = 0;
+        for (const c of this.board.cells) {
+            if (c.flagged) flagged++;
+            if (c.mine && c.revealed) revealedMines++;
+        }
+        const remaining = this.board.mineCount - flagged - revealedMines;
+        this.el.mineCount.textContent = `💣 ${remaining}`;
     }
 
     // ==================== 速推系统 ====================
@@ -1310,6 +1344,25 @@ class Game {
                 g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.05);
                 o2.start(t + d); o2.stop(t + d + 0.08);
             });
+        } else if (type === 'joker') {
+            // 小丑雷：调皮的下降“哇哇”音
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.exponentialRampToValueAtTime(200, t + 0.4);
+            g.gain.setValueAtTime(0.12, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc.start(t); osc.stop(t + 0.55);
+            // 叠加方波颤音
+            const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
+            osc2.connect(g2); g2.connect(ctx.destination);
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(300, t + 0.1);
+            osc2.frequency.exponentialRampToValueAtTime(100, t + 0.45);
+            g2.gain.setValueAtTime(0.04, t + 0.1);
+            g2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+            osc2.start(t + 0.1); osc2.stop(t + 0.55);
         } else if (type === 'win') {
             [523, 659, 784, 1047].forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();

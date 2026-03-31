@@ -36,6 +36,10 @@ class Renderer {
         // 标旗模式视觉
         this.flagMode = false;
 
+        // 小丑雷回退动画
+        this.jokerReverts = [];
+        this.jokerFlash = null;
+
         // 配色
         this.C = {
             hidden:   '#2A313A',
@@ -62,6 +66,8 @@ class Renderer {
         this.victoryAnim = null;
         this.courageAnim = null;
         this.timeoutFlash = null;
+        this.jokerReverts = [];
+        this.jokerFlash = null;
         this.canvas.style.transform = '';
         this.resize();
     }
@@ -70,7 +76,7 @@ class Renderer {
         if (!this.board) return;
         this.dpr = window.devicePixelRatio || 1;
         const maxW = Math.min(window.innerWidth - 32, 420);
-        const maxH = window.innerHeight * 0.60;
+        const maxH = window.innerHeight * 0.65;
         const cols = this.board.width, rows = this.board.height;
         const fromW = (maxW - (cols - 1) * this.gap) / cols;
         const fromH = (maxH - (rows - 1) * this.gap) / rows;
@@ -147,6 +153,23 @@ class Renderer {
         this.shakeEnd = performance.now() + Math.min(dur, 800);
         this.shakeDur = Math.min(dur, 800);
         this.shakeAmp = amp;
+    }
+
+    animateJokerRevert(cells) {
+        const now = performance.now();
+        this.jokerReverts = [];
+        for (let i = 0; i < cells.length; i++) {
+            this.jokerReverts.push({
+                x: cells[i].x, y: cells[i].y,
+                start: now + 300,
+                delay: Math.random() * 400,
+                dur: 400
+            });
+        }
+        this.jokerFlash = { start: now + 300, dur: 800 };
+        this.shakeEnd = now + 800;
+        this.shakeDur = 800;
+        this.shakeAmp = 10;
     }
 
     // ==================== 主绘制 ====================
@@ -269,6 +292,36 @@ class Renderer {
                 ctx.restore();
             } else if (t >= 1) {
                 this.timeoutFlash = null;
+            }
+        }
+
+        // 小丑雷回退紫色闪光（每格）
+        for (let i = this.jokerReverts.length - 1; i >= 0; i--) {
+            const a = this.jokerReverts[i];
+            const t = this._progress(a, now);
+            if (t >= 1) { this.jokerReverts.splice(i, 1); continue; }
+            if (t < 0) continue;
+            const rpx = a.x * (this.cellSize + this.gap);
+            const rpy = a.y * (this.cellSize + this.gap);
+            ctx.save();
+            ctx.globalAlpha = 0.5 * Math.sin(t * Math.PI);
+            ctx.fillStyle = '#BC8CFF';
+            this._roundRect(ctx, rpx, rpy, this.cellSize, this.cellSize, 4);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 小丑雷全屏紫色脉冲
+        if (this.jokerFlash) {
+            const t = (now - this.jokerFlash.start) / this.jokerFlash.dur;
+            if (t >= 0 && t < 1) {
+                ctx.save();
+                ctx.globalAlpha = 0.2 * (1 - t);
+                ctx.fillStyle = '#BC8CFF';
+                ctx.fillRect(0, 0, this.boardW, this.boardH);
+                ctx.restore();
+            } else if (t >= 1) {
+                this.jokerFlash = null;
             }
         }
     }

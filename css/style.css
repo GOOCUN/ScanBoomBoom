@@ -554,6 +554,10 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 .level {
     font-size: 13px; color: #58A6FF; font-weight: 600; white-space: nowrap;
 }
+.mine-count {
+    font-size: 13px; color: #F85149; font-weight: 600; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
 .mod-badge {
     font-size: 11px; color: #F0C040; white-space: nowrap;
 }

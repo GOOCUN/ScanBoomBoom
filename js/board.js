@@ -21,8 +21,8 @@ class Board {
         this.generated = false;
         this.revealedSafe = 0;
         this.totalSafe = width * height - mineCount;
-        this.forceUnsolvable = false;
         this.blueMineRatio = 0;
+        this.jokerMineCount = 0;
         this._stateVersion = 0;
         this._initCells();
     }
@@ -33,7 +33,7 @@ class Board {
             this.cells[i] = {
                 x: i % this.width,
                 y: (i / this.width) | 0,
-                mine: false, blue: false, adj: 0,
+                mine: false, blue: false, joker: false, adj: 0,
                 revealed: false, flagged: false,
             };
         }
@@ -48,7 +48,7 @@ class Board {
     generate(safeX, safeY) {
         const MAX_ATTEMPTS = 100;
         let bestAttempt = null;
-        let bestScore = -1;  // 普通模式：最高可解率；赌徒模式：最接近0.55
+        let bestScore = -1;
 
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             this._initCells();
@@ -58,33 +58,16 @@ class Board {
             const solved = this._solveCount(safeX, safeY);
             const ratio = solved / this.totalSafe;
 
-            if (this.forceUnsolvable) {
-                // 赌徒模式：要求 40%~70% 可解（半可解棋盘）
-                if (ratio >= 0.4 && ratio <= 0.7) {
-                    this.generated = true;
-                    this.seed = this.seed + attempt;
-                    if (this.blueMineRatio > 0) this._assignBlueMines();
-                    return;
-                }
-                // 记录最接近目标区间的尝试
-                const score = -Math.abs(ratio - 0.55);
-                if (ratio < 1.0 && score > bestScore) {
-                    bestScore = score;
-                    bestAttempt = attempt;
-                }
-            } else {
-                // 普通模式：要求完全可解
-                if (ratio >= 1.0) {
-                    this.generated = true;
-                    this.seed = this.seed + attempt;
-                    if (this.blueMineRatio > 0) this._assignBlueMines();
-                    return;
-                }
-                // 记录可解率最高的尝试作为回退
-                if (ratio > bestScore) {
-                    bestScore = ratio;
-                    bestAttempt = attempt;
-                }
+            if (ratio >= 1.0) {
+                this.generated = true;
+                this.seed = this.seed + attempt;
+                if (this.blueMineRatio > 0) this._assignBlueMines();
+                if (this.jokerMineCount > 0) this._assignJokerMines();
+                return;
+            }
+            if (ratio > bestScore) {
+                bestScore = ratio;
+                bestAttempt = attempt;
             }
         }
 
@@ -98,6 +81,7 @@ class Board {
         }
         this.generated = true;
         if (this.blueMineRatio > 0) this._assignBlueMines();
+        if (this.jokerMineCount > 0) this._assignJokerMines();
     }
 
     _assignBlueMines() {
@@ -109,6 +93,16 @@ class Board {
             [mines[i], mines[j]] = [mines[j], mines[i]];
         }
         for (let i = 0; i < blueCount; i++) mines[i].blue = true;
+    }
+
+    _assignJokerMines() {
+        const candidates = this.cells.filter(c => c.mine && !c.blue);
+        for (let i = candidates.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+        }
+        const count = Math.min(this.jokerMineCount, candidates.length);
+        for (let i = 0; i < count; i++) candidates[i].joker = true;
     }
 
     _placeMines(safeX, safeY, seed) {
@@ -421,6 +415,32 @@ class Board {
             }
         }
         return mines;
+    }
+
+    clearAllFlags() {
+        let count = 0;
+        for (const c of this.cells) {
+            if (c.flagged) { c.flagged = false; count++; }
+        }
+        if (count > 0) this._stateVersion++;
+        return count;
+    }
+
+    revertRevealedCells(ratio) {
+        const safeCells = this.cells.filter(c => c.revealed && !c.mine);
+        for (let i = safeCells.length - 1; i > 0; i--) {
+            const j = Math.random() * (i + 1) | 0;
+            [safeCells[i], safeCells[j]] = [safeCells[j], safeCells[i]];
+        }
+        const count = Math.ceil(safeCells.length * ratio);
+        const reverted = [];
+        for (let i = 0; i < count; i++) {
+            safeCells[i].revealed = false;
+            this.revealedSafe--;
+            reverted.push({ x: safeCells[i].x, y: safeCells[i].y });
+        }
+        this._stateVersion++;
+        return reverted;
     }
 
     isComplete() {
