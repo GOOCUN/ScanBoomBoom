@@ -74,6 +74,7 @@ function getBlueTimePenalty(level) {
 
 // ==================== 存档 ====================
 const STORAGE_KEY = 'neuromines_records';
+const SAVE_KEY = 'scanboom_save';
 function loadRecords() {
     try {
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -82,6 +83,18 @@ function loadRecords() {
 }
 function saveRecords(records) {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); } catch {}
+}
+function loadSave() {
+    try {
+        const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+        return d && d.level ? d : null;
+    } catch { return null; }
+}
+function writeSave(data) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch {}
+}
+function clearSave() {
+    try { localStorage.removeItem(SAVE_KEY); } catch {}
 }
 
 // ==================== 飘分系统 ====================
@@ -141,16 +154,33 @@ class Game {
 
         // UI 引用
         this.el = {
+            menuScreen:     document.getElementById('menuScreen'),
+            gameScreen:     document.getElementById('gameScreen'),
+            menuStartBtn:   document.getElementById('menuStartBtn'),
+            menuContinueBtn: document.getElementById('menuContinueBtn'),
+            menuRecord:     document.getElementById('menuRecord'),
+            menuBomb:       document.getElementById('menuBomb'),
+            menuTitle:      document.getElementById('menuTitle'),
+            menuFragments:  document.getElementById('menuFragments'),
             lives:          document.getElementById('lives'),
             level:          document.getElementById('level'),
             timer:          document.getElementById('timer'),
+            timeBarFill:    document.getElementById('timeBarFill'),
+            modBadge:       document.getElementById('modBadge'),
             score:          document.getElementById('score'),
             hint:           document.getElementById('hint'),
             comboText:      document.getElementById('comboText'),
             flagBtn:        document.getElementById('flagBtn'),
             pauseBtn:       document.getElementById('pauseBtn'),
             pauseOverlay:   document.getElementById('pauseOverlay'),
+            pauseMods:      document.getElementById('pauseMods'),
             resumeBtn:      document.getElementById('resumeBtn'),
+            pauseSettingsBtn: document.getElementById('pauseSettingsBtn'),
+            pauseAboutBtn:  document.getElementById('pauseAboutBtn'),
+            pauseHomeBtn:   document.getElementById('pauseHomeBtn'),
+            pauseConfirm:   document.getElementById('pauseConfirm'),
+            confirmYes:     document.getElementById('confirmYes'),
+            confirmNo:      document.getElementById('confirmNo'),
             courageOverlay: document.getElementById('courageOverlay'),
             courageScore:   document.getElementById('courageScore'),
             courageTime:    document.getElementById('courageTime'),
@@ -161,7 +191,7 @@ class Game {
             overlay:        document.getElementById('overlay'),
             title:          document.getElementById('overlayTitle'),
             oScore:         document.getElementById('overlayScore'),
-            msg:            document.getElementById('overlayMsg'),
+            scoreTable:     document.getElementById('scoreTable'),
             record:         document.getElementById('overlayRecord'),
             nextBtn:        document.getElementById('nextBtn'),
             restart:        document.getElementById('restartBtn'),
@@ -170,19 +200,18 @@ class Game {
             modMult:        document.getElementById('modifierMult'),
             modLevel:       document.getElementById('modifierLevel'),
             modStartBtn:    document.getElementById('modifierStartBtn'),
-            modSkipBtn:     document.getElementById('modifierSkipBtn'),
-            aboutBtn:       document.getElementById('aboutBtn'),
+            modHomeBtn:     document.getElementById('modifierHomeBtn'),
             aboutOverlay:   document.getElementById('aboutOverlay'),
             aboutCloseBtn:  document.getElementById('aboutCloseBtn'),
-            settingsBtn:    document.getElementById('settingsBtn'),
             settingsOverlay: document.getElementById('settingsOverlay'),
             settingsCloseBtn: document.getElementById('settingsCloseBtn'),
         };
 
         this.audioCtx = null;
+        this._firstLaunch = true;
 
         this._setupInput();
-        this._showModifierSelection();
+        this._showMenu();
         this._loop();
     }
 
@@ -301,6 +330,13 @@ class Game {
 
         window.addEventListener('resize', () => this.renderer.resize());
 
+        // 切换后台/标签页时自动暂停
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.state === 'playing') {
+                this._togglePause();
+            }
+        });
+
         // 标旗模式切换
         this.el.flagBtn.addEventListener('click', () => {
             if (this.activeMods.has('noFlag')) return;
@@ -314,13 +350,40 @@ class Game {
         this.el.pauseBtn.addEventListener('click', () => this._togglePause());
         this.el.resumeBtn.addEventListener('click', () => this._togglePause());
 
-        // 关于按钮
-        this.el.aboutBtn.addEventListener('click', () => this._toggleAbout());
-        this.el.aboutCloseBtn.addEventListener('click', () => this._toggleAbout());
+        // 暂停页面内按钮（不关闭暂停页，设置/关于叠在上层）
+        this.el.pauseSettingsBtn.addEventListener('click', () => {
+            this._toggleSettings();
+        });
+        this.el.pauseAboutBtn.addEventListener('click', () => {
+            this._toggleAbout();
+        });
+        this.el.pauseHomeBtn.addEventListener('click', () => {
+            // idle 状态直接返回（不丢进度），playing 需确认
+            if (this._pausedFromIdle) {
+                this.el.pauseOverlay.classList.remove('active');
+                this.state = 'ended';
+                this._showMenu();
+            } else {
+                this.el.pauseConfirm.style.display = '';
+            }
+        });
+        this.el.confirmYes.addEventListener('click', () => {
+            this.el.pauseConfirm.style.display = 'none';
+            this.el.pauseOverlay.classList.remove('active');
+            this.state = 'ended';
+            this._showMenu();
+        });
+        this.el.confirmNo.addEventListener('click', () => {
+            this.el.pauseConfirm.style.display = 'none';
+        });
 
-        // 设置按钮
-        this.el.settingsBtn.addEventListener('click', () => this._toggleSettings());
+        // 关于/设置关闭
+        this.el.aboutCloseBtn.addEventListener('click', () => this._toggleAbout());
         this.el.settingsCloseBtn.addEventListener('click', () => this._toggleSettings());
+
+        // 主菜单开始
+        this.el.menuStartBtn.addEventListener('click', () => this._menuStart());
+        this.el.menuContinueBtn.addEventListener('click', () => this._menuContinue());
 
         // 设置项变更
         document.querySelectorAll('input[name="flagMode"]').forEach(radio => {
@@ -343,6 +406,8 @@ class Game {
         this.el.nextBtn.addEventListener('click', () => {
             this.el.overlay.classList.remove('active');
             this.level++;
+            // 过关自动存档
+            this._writeSave();
             this._showModifierSelection();
         });
 
@@ -353,14 +418,15 @@ class Game {
             this.lives = this.MAX_LIVES;
             this.combo = 0;
             this.courageCnt = 0;
+            clearSave();
             this._showModifierSelection();
         });
 
         // 修饰器选择
         this.el.modStartBtn.addEventListener('click', () => this._confirmModifiers());
-        this.el.modSkipBtn.addEventListener('click', () => {
-            this.activeMods.clear();
-            this._confirmModifiers();
+        this.el.modHomeBtn.addEventListener('click', () => {
+            this.el.modOverlay.classList.remove('active');
+            this._showMenu();
         });
 
         // 初始化设置UI
@@ -428,31 +494,146 @@ class Game {
         this._startLevel();
     }
 
+    // ==================== 主菜单 ====================
+
+    _showMenu() {
+        this.el.gameScreen.style.display = 'none';
+        this.el.menuScreen.style.display = '';
+        this.el.menuScreen.classList.remove('exploding');
+        // 显示历史记录
+        if (this.records.bestLevel > 0) {
+            this.el.menuRecord.textContent = `最高: 第${this.records.bestLevel}关 · ${this.records.bestScore}分`;
+        } else {
+            this.el.menuRecord.textContent = '';
+        }
+        // 有存档时显示继续按钮
+        const save = loadSave();
+        if (save) {
+            this.el.menuContinueBtn.style.display = '';
+            this.el.menuContinueBtn.textContent = `继续游戏 ▶ 第${save.level}关 · ${save.totalScore}分`;
+            this.el.menuStartBtn.textContent = '新游戏 💥';
+        } else {
+            this.el.menuContinueBtn.style.display = 'none';
+            this.el.menuStartBtn.textContent = '新游戏 💥';
+        }
+        // 清理可能残留的叠层
+        this.el.settingsOverlay.classList.remove('active');
+        this.el.aboutOverlay.classList.remove('active');
+        this.el.pauseOverlay.classList.remove('active');
+        this.el.modOverlay.classList.remove('active');
+        this.el.overlay.classList.remove('active');
+    }
+
+    _menuContinue() {
+        this._initAudio();
+        const save = loadSave();
+        if (!save) return;
+
+        // 恢复存档状态
+        this.level = save.level;
+        this.totalScore = save.totalScore;
+        this.lives = save.lives;
+        this.combo = save.combo || 0;
+        this.courageCnt = save.courageCnt || 0;
+
+        // 爆炸过渡
+        this.el.menuContinueBtn.disabled = true;
+        this._spawnMenuFragments();
+        this.el.menuScreen.classList.add('exploding');
+        this._haptic('mine');
+        this._playSound('boom');
+
+        setTimeout(() => {
+            this.el.menuScreen.style.display = 'none';
+            this.el.gameScreen.style.display = '';
+            this.el.menuContinueBtn.disabled = false;
+            this._showModifierSelection();
+        }, 600);
+    }
+
+    _menuStart() {
+        this._initAudio();
+        this.el.menuStartBtn.disabled = true;
+
+        // 立即爆炸
+        this._spawnMenuFragments();
+        this.el.menuScreen.classList.add('exploding');
+        this._haptic('mine');
+        this._playSound('boom');
+
+        setTimeout(() => {
+            this.el.menuScreen.style.display = 'none';
+            this.el.gameScreen.style.display = '';
+            this.el.menuStartBtn.disabled = false;
+
+            // 重置游戏状态
+            clearSave();
+            this.level = 1;
+            this.totalScore = 0;
+            this.lives = this.MAX_LIVES;
+            this.combo = 0;
+            this.courageCnt = 0;
+            this._showModifierSelection();
+        }, 600);
+    }
+
+    _spawnMenuFragments() {
+        const container = this.el.menuFragments;
+        container.innerHTML = '';
+        const colors = ['#F85149', '#F0883E', '#F0C040', '#FFD700', '#FF6B35'];
+        for (let i = 0; i < 24; i++) {
+            const f = document.createElement('div');
+            f.className = 'menu-frag';
+            f.style.background = colors[(Math.random() * colors.length) | 0];
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 100 + Math.random() * 300;
+            f.style.setProperty('--fx', (Math.cos(angle) * dist) + 'px');
+            f.style.setProperty('--fy', (Math.sin(angle) * dist - 100) + 'px');
+            f.style.left = (40 + Math.random() * 20) + '%';
+            f.style.top = (30 + Math.random() * 20) + '%';
+            const size = 8 + Math.random() * 20;
+            f.style.width = size + 'px';
+            f.style.height = size + 'px';
+            container.appendChild(f);
+        }
+    }
+
     // ==================== 暂停 ====================
 
     _togglePause() {
-        if (this.state === 'playing') {
+        if (this.state === 'idle') {
+            // idle 状态也可暂停（还没开始计时）
             this.state = 'paused';
+            this._pausedFromIdle = true;
+            this.el.pauseMods.innerHTML = '';
+            this.el.pauseConfirm.style.display = 'none';
+            this.el.pauseOverlay.classList.add('active');
+            this.el.pauseBtn.textContent = '▶';
+        } else if (this.state === 'playing') {
+            this.state = 'paused';
+            this._pausedFromIdle = false;
+            // 显示当前修饰器
+            if (this.activeMods.size > 0) {
+                const modTexts = [...this.activeMods].map(k => `${MODIFIERS[k].icon} ${MODIFIERS[k].name}`);
+                this.el.pauseMods.innerHTML = `<div class="pause-mods-label">当前修饰器</div><div class="pause-mods-list">${modTexts.join(' · ')}</div><div class="pause-mods-mult">得分倍率 ×${this.scoreMult.toFixed(1)}</div>`;
+            } else {
+                this.el.pauseMods.innerHTML = '';
+            }
+            this.el.pauseConfirm.style.display = 'none';
             this.el.pauseOverlay.classList.add('active');
             this.el.pauseBtn.textContent = '▶';
         } else if (this.state === 'paused') {
-            this.state = 'playing';
-            this.lastTick = performance.now(); // 防止计入暂停时间
+            this.state = this._pausedFromIdle ? 'idle' : 'playing';
+            if (!this._pausedFromIdle) this.lastTick = performance.now();
+            this._pausedFromIdle = false;
             this.el.pauseOverlay.classList.remove('active');
             this.el.pauseBtn.textContent = '⏸';
         }
     }
 
     _toggleAbout() {
-        const active = this.el.aboutOverlay.classList.toggle('active');
-        if (active && this.state === 'playing') {
-            this._prevStateAbout = 'playing';
-            this.state = 'paused';
-        } else if (!active && this._prevStateAbout) {
-            this.state = this._prevStateAbout;
-            this.lastTick = performance.now();
-            this._prevStateAbout = null;
-        }
+        const overlay = this.el.aboutOverlay;
+        overlay.classList.toggle('active');
     }
 
     // ==================== 关卡控制 ====================
@@ -487,6 +668,17 @@ class Game {
         this.levelScore = 0;
         this.hitMines = 0;
         this.consecutiveCourage = 0;
+
+        // 分数明细跟踪
+        this.scoreBreakdown = {
+            base: 0,        // 翻开基础得分
+            combo: 0,       // Combo加成
+            courage: 0,     // 勇气奖励得分
+            courageExtra: 0, // 勇气生存奖励（满血转分数）
+            timeBonus: 0,   // 时间奖励
+            noDmgBonus: 0,  // 无伤加成
+            penalty: 0,     // 踩雷扣分
+        };
 
         // 重置标旗模式
         this.flagMode = false;
@@ -637,6 +829,7 @@ class Game {
             this.lives--;
             const penalty = 50;
             this.totalScore = Math.max(0, this.totalScore - penalty);
+            this.scoreBreakdown.penalty += penalty;
             this._uiLives();
             this._uiScore();
             this._uiCombo();
@@ -663,6 +856,11 @@ class Game {
         const points = Math.round(basePoints * this.scoreMult);
         this.levelScore += points;
         this.totalScore += points;
+
+        // 分数明细
+        const rawBase = Math.round((n * 10 + Math.max(0, n - 1) * 5) * this.scoreMult);
+        this.scoreBreakdown.base += rawBase;
+        this.scoreBreakdown.combo += points - rawBase;
 
         this._uiScore();
         this._uiCombo();
@@ -701,6 +899,7 @@ class Game {
         const tBonus = Math.round(Math.ceil(this.time) * 5 * this.scoreMult);
         this.totalScore += tBonus;
         this.levelScore += tBonus;
+        this.scoreBreakdown.timeBonus = tBonus;
 
         // 无伤通关加成：本关得分 +10%
         if (this.hitMines === 0) {
@@ -708,8 +907,10 @@ class Game {
             this.totalScore += noDmgBonus;
             this.levelScore += noDmgBonus;
             this.noDmgBonus = noDmgBonus;
+            this.scoreBreakdown.noDmgBonus = noDmgBonus;
         } else {
             this.noDmgBonus = 0;
+            this.scoreBreakdown.noDmgBonus = 0;
         }
 
         this._uiScore();
@@ -731,6 +932,7 @@ class Game {
         const bonusPoints = Math.round(this.levelScore * progress * decay);
         this.totalScore += bonusPoints;
         this.levelScore += bonusPoints;
+        this.scoreBreakdown.courage += bonusPoints;
 
         // 生存奖励
         let survivalMsg = '';
@@ -744,6 +946,7 @@ class Game {
                 const extraPoints = Math.round(this.levelScore * 0.25);
                 this.totalScore += extraPoints;
                 this.levelScore += extraPoints;
+                this.scoreBreakdown.courageExtra += extraPoints;
                 survivalMsg = `💰 +${extraPoints}分`;
             }
         } else {
@@ -856,15 +1059,19 @@ class Game {
             this.renderer.animateVictory();
             this._playSound('win');
             this._haptic('win');
-        } else if (reason === 'time') {
-            // 时间到：雷依次翻出 + 全屏爆炸
-            const mines = this.board.revealMines();
-            if (mines.length > 0) this.renderer.animateTimeoutExplosion(mines);
-            this._playSound('timeout');
-            this._haptic('gameOver');
         } else {
-            const mines = this.board.revealMines();
-            if (mines.length > 0) this.renderer.animateRevealMines(mines);
+            // 游戏失败 → 清除存档
+            clearSave();
+            if (reason === 'time') {
+                // 时间到：雷依次翻出 + 全屏爆炸
+                const mines = this.board.revealMines();
+                if (mines.length > 0) this.renderer.animateTimeoutExplosion(mines);
+                this._playSound('timeout');
+                this._haptic('gameOver');
+            } else {
+                const mines = this.board.revealMines();
+                if (mines.length > 0) this.renderer.animateRevealMines(mines);
+            }
         }
 
         let isNewRecord = false;
@@ -878,25 +1085,38 @@ class Game {
 
         const delay = isWin ? 900 : 600;
         setTimeout(() => {
+            const sb = this.scoreBreakdown;
+
             if (isWin) {
-                this.el.title.textContent = '🎉 通关！';
-                const parts = [`第${this.level}关完成`];
-                const tBonus = Math.round(Math.ceil(this.time) * 5 * this.scoreMult);
-                parts.push(`时间 +${tBonus}`);
-                if (this.noDmgBonus > 0) parts.push(`🛡️无伤 +${this.noDmgBonus}`);
-                if (this.scoreMult > 1) parts.push(`倍率 ×${this.scoreMult.toFixed(1)}`);
-                parts.push('回复1❤️');
-                this.el.msg.textContent = parts.join(' · ');
+                this.el.title.textContent = `🎉 第${this.level}关 通关！`;
+                // 构建分数明细表
+                let rows = '';
+                rows += this._scoreRow('翻开得分', sb.base);
+                if (sb.combo > 0) rows += this._scoreRow('Combo加成', sb.combo);
+                if (sb.courage > 0) rows += this._scoreRow('🎲 勇气奖励', sb.courage);
+                if (sb.courageExtra > 0) rows += this._scoreRow('🎲 勇气额外', sb.courageExtra);
+                if (sb.penalty > 0) rows += this._scoreRow('踩雷扣分', -sb.penalty, true);
+                rows += '<div class="score-row score-divider"></div>';
+                rows += this._scoreRow('⏰ 时间奖励', sb.timeBonus);
+                if (sb.noDmgBonus > 0) rows += this._scoreRow('🛡️ 无伤加成', sb.noDmgBonus);
+                if (this.scoreMult > 1) rows += `<div class="score-row score-mult"><span>修饰器倍率</span><span>×${this.scoreMult.toFixed(1)}</span></div>`;
+                rows += '<div class="score-row score-divider"></div>';
+                rows += `<div class="score-row score-total"><span>本关合计</span><span>+${this.levelScore}</span></div>`;
+                if (isWin) rows += `<div class="score-row score-life"><span>❤️ +1 生命</span><span></span></div>`;
+                this.el.scoreTable.innerHTML = rows;
+
                 this.el.nextBtn.classList.remove('hidden');
                 this.el.restart.textContent = '重新开始';
             } else {
-                if (reason === 'time') {
-                    this.el.title.textContent = '💥 时间到，雷爆了！';
-                } else {
-                    this.el.title.textContent = '💥 游戏结束';
-                }
-                const courageMsg = this.courageCnt > 0 ? ` · 🎲勇气×${this.courageCnt}` : '';
-                this.el.msg.textContent = `到达第${this.level}关${courageMsg}`;
+                this.el.title.textContent = reason === 'time' ? '💥 时间到，雷爆了！' : '💥 游戏结束';
+                // 失败统计
+                let rows = '';
+                rows += `<div class="score-row"><span>到达关卡</span><span>第${this.level}关</span></div>`;
+                rows += `<div class="score-row"><span>本关得分</span><span>+${this.levelScore}</span></div>`;
+                if (this.courageCnt > 0) rows += `<div class="score-row"><span>🎲 勇气时刻</span><span>×${this.courageCnt}</span></div>`;
+                if (this.hitMines > 0) rows += `<div class="score-row"><span>踩雷次数</span><span>${this.hitMines}</span></div>`;
+                this.el.scoreTable.innerHTML = rows;
+
                 this.el.nextBtn.classList.add('hidden');
                 this.el.restart.textContent = '再来一次';
             }
@@ -907,6 +1127,24 @@ class Game {
             this.el.record.classList.toggle('new-record', isNewRecord);
             this.el.overlay.classList.add('active');
         }, reason === 'time' ? 1200 : delay);
+    }
+
+    _scoreRow(label, value, isNeg) {
+        const color = isNeg ? 'color:#F85149' : '';
+        const prefix = isNeg ? '' : '+';
+        return `<div class="score-row"><span>${label}</span><span style="${color}">${prefix}${value}</span></div>`;
+    }
+
+    // ==================== 存档 ====================
+
+    _writeSave() {
+        writeSave({
+            level: this.level,
+            totalScore: this.totalScore,
+            lives: this.lives,
+            combo: this.combo,
+            courageCnt: this.courageCnt,
+        });
     }
 
     // ==================== UI ====================
@@ -921,6 +1159,13 @@ class Game {
 
     _uiLevel() {
         this.el.level.textContent = `第${this.level}关`;
+        // 修饰器徽章
+        if (this.activeMods.size > 0) {
+            const icons = [...this.activeMods].map(k => MODIFIERS[k].icon).join('');
+            this.el.modBadge.textContent = `${icons} ×${this.scoreMult.toFixed(1)}`;
+        } else {
+            this.el.modBadge.textContent = '';
+        }
     }
 
     _uiTimer() {
@@ -928,6 +1173,12 @@ class Game {
         const m = (s / 60) | 0, sec = s % 60;
         this.el.timer.textContent = String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
         this.el.timer.classList.toggle('urgent', this.time <= 10 && this.state === 'playing');
+        // 时间进度条
+        const pct = Math.max(0, Math.min(100, (this.time / this.maxTime) * 100));
+        this.el.timeBarFill.style.width = pct + '%';
+        if (pct > 40) this.el.timeBarFill.className = 'time-bar-fill';
+        else if (pct > 15) this.el.timeBarFill.className = 'time-bar-fill time-warn';
+        else this.el.timeBarFill.className = 'time-bar-fill time-danger';
     }
 
     _uiScore() {
@@ -1143,14 +1394,6 @@ class Game {
 
     _toggleSettings() {
         const active = this.el.settingsOverlay.classList.toggle('active');
-        if (active && this.state === 'playing') {
-            this._prevStateSettings = 'playing';
-            this.state = 'paused';
-        } else if (!active && this._prevStateSettings) {
-            this.state = this._prevStateSettings;
-            this.lastTick = performance.now();
-            this._prevStateSettings = null;
-        }
         if (active) this._applySettingsUI();
     }
 

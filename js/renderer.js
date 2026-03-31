@@ -38,10 +38,12 @@ class Renderer {
 
         // 配色
         this.C = {
-            hidden:   '#21262D',
-            hover:    '#30363D',
-            revealed: '#161B22',
-            border:   '#30363D',
+            hidden:   '#2A313A',
+            hiddenLit:'#343D48',
+            hiddenShd:'#1B2028',
+            hover:    '#3A4450',
+            revealed: '#131920',
+            border:   '#3A4450',
             mine:     '#F85149',
             flag:     '#F0883E',
             flagBg:   '#2D1F0E',
@@ -68,7 +70,7 @@ class Renderer {
         if (!this.board) return;
         this.dpr = window.devicePixelRatio || 1;
         const maxW = Math.min(window.innerWidth - 32, 420);
-        const maxH = window.innerHeight * 0.55;
+        const maxH = window.innerHeight * 0.60;
         const cols = this.board.width, rows = this.board.height;
         const fromW = (maxW - (cols - 1) * this.gap) / cols;
         const fromH = (maxH - (rows - 1) * this.gap) / rows;
@@ -275,11 +277,24 @@ class Renderer {
 
     _drawHidden(ctx, px, py, x, y) {
         const hover = this.hoverCell && this.hoverCell.x === x && this.hoverCell.y === y;
+        const s = this.cellSize;
+        // 主体
         ctx.fillStyle = hover
             ? (this.flagMode ? '#3D2A10' : this.C.hover)
             : this.C.hidden;
-        this._roundRect(ctx, px, py, this.cellSize, this.cellSize, 4);
+        this._roundRect(ctx, px, py, s, s, 4);
         ctx.fill();
+        // 3D 高光（左上亮边）
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = this.C.hiddenLit;
+        ctx.fillRect(px + 2, py + 1, s - 4, 2);
+        ctx.fillRect(px + 1, py + 2, 2, s - 4);
+        // 3D 阴影（右下暗边）
+        ctx.fillStyle = this.C.hiddenShd;
+        ctx.fillRect(px + 2, py + s - 3, s - 4, 2);
+        ctx.fillRect(px + s - 3, py + 2, 2, s - 4);
+        ctx.restore();
     }
 
     _drawFlagged(ctx, px, py) {
@@ -297,10 +312,13 @@ class Renderer {
         ctx.fillStyle = this.C.revealed;
         this._roundRect(ctx, px, py, this.cellSize, this.cellSize, 4);
         ctx.fill();
-        ctx.strokeStyle = this.C.border;
-        ctx.lineWidth = 0.5;
-        this._roundRect(ctx, px, py, this.cellSize, this.cellSize, 4);
-        ctx.stroke();
+        // 内陷阴影（顶部暗线）
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(px + 2, py + 1, this.cellSize - 4, 1.5);
+        ctx.fillRect(px + 1, py + 2, 1.5, this.cellSize - 4);
+        ctx.restore();
 
         const cx = px + this.cellSize / 2, cy = py + this.cellSize / 2;
         if (cell.mine) {

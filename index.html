@@ -20,15 +20,38 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="app">
+    <!-- 主菜单 -->
+    <div id="menuScreen" class="menu-screen">
+        <div class="menu-content">
+            <div class="menu-bomb" id="menuBomb">💣</div>
+            <h1 class="menu-title" id="menuTitle">ScanBoomBoom</h1>
+            <p class="menu-subtitle">60秒神经扫雷</p>
+            <div id="menuRecord" class="menu-record"></div>
+            <button id="menuContinueBtn" class="menu-continue-btn" style="display:none">继续游戏 ▶</button>
+            <button id="menuStartBtn" class="menu-start-btn">
+                新游戏 💥
+            </button>
+        </div>
+        <!-- 爆炸碎片容器 -->
+        <div id="menuFragments" class="menu-fragments"></div>
+    </div>
+
+    <div class="app" id="gameScreen" style="display:none">
         <div class="top-bar">
             <span id="lives" class="lives">❤️❤️❤️</span>
-            <span id="level" class="level">第1关</span>
-            <span id="timer" class="timer">01:00</span>
             <button id="pauseBtn" class="pause-btn">⏸</button>
             <span id="score" class="score">0</span>
-            <button id="settingsBtn" class="settings-btn">⚙️</button>
-            <button id="aboutBtn" class="about-btn">ℹ️</button>
+        </div>
+
+        <div class="info-bar">
+            <div class="time-bar-wrap">
+                <div id="timeBar" class="time-bar"><div id="timeBarFill" class="time-bar-fill"></div></div>
+                <span id="timer" class="timer">01:00</span>
+            </div>
+            <div class="level-info">
+                <span id="level" class="level">第1关</span>
+                <span id="modBadge" class="mod-badge"></span>
+            </div>
         </div>
 
         <div class="board-wrap">
@@ -58,7 +81,19 @@
             <div class="pause-content">
                 <div class="pause-icon">⏸</div>
                 <div class="pause-label">已暂停</div>
+                <div id="pauseMods" class="pause-mods"></div>
                 <button id="resumeBtn" class="btn-primary">继续游戏</button>
+                <button id="pauseSettingsBtn" class="btn-secondary">⚙️ 设置</button>
+                <button id="pauseAboutBtn" class="btn-secondary">ℹ️ 关于</button>
+                <button id="pauseHomeBtn" class="btn-tertiary">🏠 回主菜单</button>
+                <!-- 确认弹窗 -->
+                <div id="pauseConfirm" class="pause-confirm" style="display:none">
+                    <div class="pause-confirm-text">本关进度将丢失，存档保留在上一关通关点。确认返回主菜单？</div>
+                    <div class="pause-confirm-btns">
+                        <button id="confirmYes" class="btn-secondary" style="color:#F85149">确认返回</button>
+                        <button id="confirmNo" class="btn-secondary">取消</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -82,16 +117,16 @@
                 <div id="modifierList" class="modifier-list"></div>
                 <div class="modifier-mult">得分倍率 <span id="modifierMult">×1.0</span></div>
                 <button id="modifierStartBtn" class="btn-primary">开始挑战</button>
-                <button id="modifierSkipBtn" class="btn-skip">不选，直接开始</button>
+                <button id="modifierHomeBtn" class="btn-tertiary" style="margin-top:8px;width:auto">🏠 回主菜单</button>
             </div>
         </div>
 
         <div id="overlay" class="overlay">
             <div class="overlay-content">
                 <div id="overlayTitle" class="overlay-title"></div>
-                <div class="overlay-score-label">总得分</div>
+                <div id="scoreTable" class="score-table"></div>
+                <div class="overlay-total-label">总得分</div>
                 <div id="overlayScore" class="overlay-score"></div>
-                <div id="overlayMsg" class="overlay-msg"></div>
                 <div id="overlayRecord" class="overlay-record"></div>
                 <div class="overlay-buttons">
                     <button id="nextBtn" class="btn-primary hidden">下一关 ⭐</button>
@@ -148,7 +183,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.1</small></span>
+                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.3</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">

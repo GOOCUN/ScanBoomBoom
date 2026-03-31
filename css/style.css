@@ -448,3 +448,196 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     transform: translateX(20px);
 }
 
+/* ============================================
+   主菜单
+   ============================================ */
+.menu-screen {
+    position: fixed; inset: 0; z-index: 300;
+    display: flex; align-items: center; justify-content: center;
+    background: #0D1117;
+    transition: opacity .5s;
+}
+.menu-screen.exploding { opacity: 0; pointer-events: none; }
+
+.menu-content {
+    text-align: center; position: relative; z-index: 1;
+}
+.menu-bomb {
+    font-size: 80px; line-height: 1;
+    animation: menu-bomb-pulse 2s ease-in-out infinite;
+}
+@keyframes menu-bomb-pulse {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    50% { transform: scale(1.1) rotate(6deg); }
+}
+.menu-title {
+    font-size: 32px; font-weight: 900; color: #C9D1D9;
+    margin-top: 12px; letter-spacing: 2px;
+}
+.menu-subtitle {
+    font-size: 14px; color: #6E7681; margin-top: 6px;
+}
+.menu-record {
+    font-size: 13px; color: #8B949E; margin-top: 16px; min-height: 18px;
+}
+.menu-start-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px; margin-top: 28px;
+    padding: 16px 48px; border-radius: 16px;
+    background: #238636; color: #fff; border: none;
+    font-size: 20px; font-weight: 800; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 4px 20px rgba(35,134,54,.4);
+}
+.menu-start-btn:active { transform: scale(.95); }
+.menu-start-btn:disabled { opacity: .6; pointer-events: none; }
+
+.menu-continue-btn {
+    display: block; margin: 20px auto 0;
+    padding: 14px 40px; border-radius: 14px;
+    background: #1F6FEB; color: #fff; border: none;
+    font-size: 17px; font-weight: 700; cursor: pointer;
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 4px 16px rgba(31,111,235,.35);
+}
+.menu-continue-btn:active { transform: scale(.95); }
+
+
+/* 爆炸碎片 */
+.menu-fragments {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2;
+}
+.menu-frag {
+    position: absolute; border-radius: 3px;
+    animation: frag-fly .8s ease-out forwards;
+    opacity: 1;
+}
+@keyframes frag-fly {
+    0%   { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(var(--fx), var(--fy)) scale(0.2) rotate(720deg); }
+}
+
+/* ============================================
+   信息栏 (时间条 + 关卡信息)
+   ============================================ */
+.info-bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 4px 16px 8px; flex-shrink: 0;
+}
+.time-bar-wrap {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+}
+.time-bar {
+    flex: 1; height: 6px; background: #21262D; border-radius: 3px;
+    overflow: hidden;
+}
+.time-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: #3FB950;
+    transition: width .3s linear, background .3s;
+}
+.time-bar-fill.time-warn { background: #F0883E; }
+.time-bar-fill.time-danger { background: #F85149; animation: bar-pulse .5s infinite; }
+@keyframes bar-pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+.timer {
+    font-variant-numeric: tabular-nums; font-weight: 700;
+    font-size: 14px; color: #8B949E; min-width: 42px; text-align: right;
+    flex-shrink: 0;
+}
+.timer.urgent { color: #F85149; animation: pulse-timer 0.6s infinite; }
+
+.level-info {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.level {
+    font-size: 13px; color: #58A6FF; font-weight: 600; white-space: nowrap;
+}
+.mod-badge {
+    font-size: 11px; color: #F0C040; white-space: nowrap;
+}
+
+/* ============================================
+   暂停菜单扩展
+   ============================================ */
+.pause-mods {
+    text-align: center; margin-bottom: 20px;
+}
+.pause-mods-label {
+    font-size: 12px; color: #6E7681; margin-bottom: 6px;
+}
+.pause-mods-list {
+    font-size: 14px; color: #F0C040; margin-bottom: 4px;
+}
+.pause-mods-mult {
+    font-size: 13px; color: #8B949E;
+}
+.pause-content .btn-secondary {
+    display: block; width: 200px; margin: 8px auto 0; text-align: center;
+}
+.btn-tertiary {
+    display: block; width: 200px; margin: 16px auto 0;
+    padding: 10px 20px; border-radius: 12px;
+    background: none; border: 1px solid #30363D;
+    color: #8B949E; font-size: 14px; cursor: pointer;
+    transition: all .15s;
+}
+.btn-tertiary:active { transform: scale(.94); }
+.btn-tertiary:hover { color: #C9D1D9; border-color: #484F58; }
+
+/* 暂停确认弹窗 */
+.pause-confirm {
+    margin-top: 16px; padding: 14px; border-radius: 12px;
+    background: #161B22; border: 1px solid #30363D;
+}
+.pause-confirm-text {
+    font-size: 13px; color: #C9D1D9; margin-bottom: 12px; line-height: 1.6;
+}
+.pause-confirm-btns {
+    display: flex; gap: 10px; justify-content: center;
+}
+.pause-confirm-btns .btn-secondary {
+    width: auto; padding: 8px 20px; font-size: 13px;
+}
+.pause-content .btn-primary {
+    display: block; width: 200px; margin: 0 auto;
+}
+
+/* ============================================
+   分数明细表
+   ============================================ */
+.score-table {
+    width: 260px; margin: 12px auto;
+    text-align: left;
+}
+.score-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; font-size: 14px; color: #C9D1D9;
+}
+.score-row span:last-child {
+    font-weight: 700; font-variant-numeric: tabular-nums;
+    color: #3FB950;
+}
+.score-divider {
+    height: 1px; background: #21262D; margin: 4px 0;
+    padding: 0 !important;
+}
+.score-row.score-mult span:last-child { color: #F0C040; }
+.score-row.score-total {
+    font-size: 16px; font-weight: 700;
+}
+.score-row.score-total span:last-child { font-size: 18px; }
+.score-row.score-life span:first-child { color: #3FB950; }
+
+.overlay-total-label {
+    font-size: 13px; color: #8B949E; margin-top: 8px;
+}
+
+/* ============================================
+   棋盘区域微调 (新布局更大)
+   ============================================ */
+.board-wrap {
+    padding: 0 8px;
+}
+
