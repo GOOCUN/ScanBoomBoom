@@ -216,7 +216,7 @@ class Game {
                     const pos = this.renderer.hitTest(px, py);
                     if (pos) {
                         this._doFlag(pos);
-                        this._vibrate(30);
+                        this._haptic('flag');
                     }
                 }, 400);
             }
@@ -626,7 +626,7 @@ class Game {
 
             this.renderer.animateExplosion(result.x, result.y, '#58A6FF');
             this._playSound('blueMine');
-            this._vibrate(50);
+            this._haptic('blueMine');
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`⏱️-${timeLoss}s`, px, py, '#58A6FF');
@@ -643,7 +643,7 @@ class Game {
 
             this.renderer.animateExplosion(result.x, result.y);
             this._playSound('boom');
-            this._vibrate(100);
+            this._haptic('mine');
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn(`-${penalty}`, px, py, '#F85149');
@@ -669,6 +669,7 @@ class Game {
 
         this.renderer.animateReveal(cells);
         this._playSound('pop', n);
+        this._haptic(n >= 3 ? 'reveal' : 'tick');
 
         // 飘分
         const mid = cells[Math.floor(cells.length / 2)];
@@ -724,6 +725,7 @@ class Game {
         const progress = this.board.revealedSafe / this.board.totalSafe;
 
         // 分数奖励：本关分 × 进度，连续触发递减（中间有推理步骤则重置）
+        this._haptic('courage');
         const decay = Math.pow(0.5, this.consecutiveCourage);
         this.consecutiveCourage++;
         const bonusPoints = Math.round(this.levelScore * progress * decay);
@@ -853,13 +855,13 @@ class Game {
             this._uiLives();
             this.renderer.animateVictory();
             this._playSound('win');
-            this._vibrate([30, 20, 30]);
+            this._haptic('win');
         } else if (reason === 'time') {
             // 时间到：雷依次翻出 + 全屏爆炸
             const mines = this.board.revealMines();
             if (mines.length > 0) this.renderer.animateTimeoutExplosion(mines);
             this._playSound('timeout');
-            this._vibrate([100, 50, 100]);
+            this._haptic('gameOver');
         } else {
             const mines = this.board.revealMines();
             if (mines.length > 0) this.renderer.animateRevealMines(mines);
@@ -1168,10 +1170,53 @@ class Game {
         if (v) v.checked = this.settings.vibration;
     }
 
-    _vibrate(pattern) {
-        if (this.settings.vibration && navigator.vibrate) {
-            navigator.vibrate(pattern);
+    // ==================== 触觉反馈抽象层 ====================
+    // Web 阶段: navigator.vibrate() 降级
+    // App 阶段: 替换为 Capacitor @capacitor/haptics
+    //   impact({ style: 'light' })       → reveal
+    //   impact({ style: 'medium' })      → flag / blueMine
+    //   impact({ style: 'heavy' })       → mine
+    //   notification({ type: 'success' })→ win
+    //   notification({ type: 'error' })  → gameOver
+    //   notification({ type: 'warning' })→ courage
+    //   selectionChanged()               → tick
+
+    _haptic(type) {
+        if (!this.settings.vibration) return;
+
+        // -- Web 降级实现（仅 Android 生效） --
+        if (navigator.vibrate) {
+            const patterns = {
+                tick:     5,
+                reveal:   8,
+                flag:     15,
+                blueMine: 40,
+                mine:     80,
+                courage:  [30, 20, 50],
+                win:      [20, 15, 20, 15, 30],
+                gameOver: [80, 40, 80],
+            };
+            const p = patterns[type];
+            if (p) navigator.vibrate(p);
         }
+
+        // -- Capacitor 实现（打包 App 时启用） --
+        // if (window.Capacitor?.Plugins?.Haptics) {
+        //     const H = window.Capacitor.Plugins.Haptics;
+        //     const map = {
+        //         tick:     () => H.selectionChanged(),
+        //         reveal:   () => H.impact({ style: 'light' }),
+        //         flag:     () => H.impact({ style: 'medium' }),
+        //         blueMine: () => H.impact({ style: 'medium' }),
+        //         mine:     () => H.impact({ style: 'heavy' }),
+        //         courage:  () => H.notification({ type: 'warning' }),
+        //         win:      () => H.notification({ type: 'success' }),
+        //         gameOver: () => H.notification({ type: 'error' }),
+        //     };
+        //     const fn = map[type];
+        //     if (fn) fn();
+        //     return;
+        // }
     }
 
     // ==================== 主循环 ====================
