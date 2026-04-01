@@ -229,6 +229,15 @@ class Game {
             aboutCloseBtn:  document.getElementById('aboutCloseBtn'),
             settingsOverlay: document.getElementById('settingsOverlay'),
             settingsCloseBtn: document.getElementById('settingsCloseBtn'),
+            menuSettingsBtn: document.getElementById('menuSettingsBtn'),
+            menuTutorialBtn: document.getElementById('menuTutorialBtn'),
+            menuAchieveBtn:  document.getElementById('menuAchieveBtn'),
+            tutorialOverlay: document.getElementById('tutorialOverlay'),
+            tutorialCloseBtn: document.getElementById('tutorialCloseBtn'),
+            achieveOverlay:  document.getElementById('achieveOverlay'),
+            achieveCloseBtn: document.getElementById('achieveCloseBtn'),
+            shareBtn:        document.getElementById('shareBtn'),
+            shareCanvas:     document.getElementById('shareCanvas'),
         };
 
         this.audioCtx = null;
@@ -410,6 +419,16 @@ class Game {
         this.el.menuStartBtn.addEventListener('click', () => this._menuStart());
         this.el.menuContinueBtn.addEventListener('click', () => this._menuContinue());
 
+        // 主菜单辅助按钮
+        this.el.menuSettingsBtn.addEventListener('click', () => this._toggleSettings());
+        this.el.menuTutorialBtn.addEventListener('click', () => this._toggleTutorial());
+        this.el.menuAchieveBtn.addEventListener('click', () => this._toggleAchieve());
+        this.el.tutorialCloseBtn.addEventListener('click', () => this._toggleTutorial());
+        this.el.achieveCloseBtn.addEventListener('click', () => this._toggleAchieve());
+
+        // 分享按钮
+        this.el.shareBtn.addEventListener('click', () => this._shareResult());
+
         // 设置项变更
         document.querySelectorAll('input[name="flagMode"]').forEach(radio => {
             radio.addEventListener('change', e => {
@@ -550,6 +569,14 @@ class Game {
         this.el.pauseOverlay.classList.remove('active');
         this.el.modOverlay.classList.remove('active');
         this.el.overlay.classList.remove('active');
+        this.el.tutorialOverlay.classList.remove('active');
+        this.el.achieveOverlay.classList.remove('active');
+
+        // 首次访问自动弹出教程
+        if (!localStorage.getItem('scanboom_tutorialSeen')) {
+            localStorage.setItem('scanboom_tutorialSeen', '1');
+            setTimeout(() => this.el.tutorialOverlay.classList.add('active'), 400);
+        }
     }
 
     _menuContinue() {
@@ -662,6 +689,14 @@ class Game {
     _toggleAbout() {
         const overlay = this.el.aboutOverlay;
         overlay.classList.toggle('active');
+    }
+
+    _toggleTutorial() {
+        this.el.tutorialOverlay.classList.toggle('active');
+    }
+
+    _toggleAchieve() {
+        this.el.achieveOverlay.classList.toggle('active');
     }
 
     // ==================== 关卡控制 ====================
@@ -1223,6 +1258,136 @@ class Game {
         const color = isNeg ? 'color:#F85149' : '';
         const prefix = isNeg ? '' : '+';
         return `<div class="score-row"><span>${label}</span><span style="${color}">${prefix}${value}</span></div>`;
+    }
+
+    // ==================== 分享卡片 ====================
+
+    _shareResult() {
+        const cvs = this.el.shareCanvas;
+        const W = 640, H = 400;
+        cvs.width = W; cvs.height = H;
+        const ctx = cvs.getContext('2d');
+
+        // 背景渐变
+        const bg = ctx.createLinearGradient(0, 0, W, H);
+        bg.addColorStop(0, '#0D1117');
+        bg.addColorStop(0.5, '#161B22');
+        bg.addColorStop(1, '#0D1117');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // 装饰网格
+        ctx.strokeStyle = 'rgba(48,54,61,0.3)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+        for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+        // 左侧发光效果
+        const glow = ctx.createRadialGradient(120, H / 2, 0, 120, H / 2, 200);
+        glow.addColorStop(0, 'rgba(35,134,54,0.15)');
+        glow.addColorStop(1, 'transparent');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        // 标题
+        ctx.font = '700 26px system-ui, sans-serif';
+        ctx.fillStyle = '#C9D1D9';
+        ctx.textAlign = 'left';
+        ctx.fillText('💣 ScanBoomBoom', 36, 52);
+
+        // 副标题
+        ctx.font = '400 13px system-ui, sans-serif';
+        ctx.fillStyle = '#6E7681';
+        ctx.fillText('60秒神经扫雷', 36, 74);
+
+        // 判断胜负
+        const isWin = this.state === 'ended' && this.el.nextBtn && !this.el.nextBtn.classList.contains('hidden');
+        const isFinalWin = this.level >= 25 && isWin;
+
+        // 状态大字
+        ctx.textAlign = 'center';
+        if (isFinalWin) {
+            ctx.font = '900 36px system-ui, sans-serif';
+            ctx.fillStyle = '#F0C040';
+            ctx.fillText('🏆 全部通关！', W / 2, 140);
+        } else if (isWin) {
+            ctx.font = '900 36px system-ui, sans-serif';
+            ctx.fillStyle = '#3FB950';
+            ctx.fillText(`🎉 第${this.level}关 通关！`, W / 2, 140);
+        } else {
+            ctx.font = '900 36px system-ui, sans-serif';
+            ctx.fillStyle = '#F85149';
+            ctx.fillText(`💥 挑战至第${this.level}关`, W / 2, 140);
+        }
+
+        // 总分
+        ctx.font = '900 56px system-ui, sans-serif';
+        ctx.fillStyle = '#3FB950';
+        ctx.fillText(String(this.totalScore), W / 2, 210);
+        ctx.font = '400 14px system-ui, sans-serif';
+        ctx.fillStyle = '#8B949E';
+        ctx.fillText('总 得 分', W / 2, 234);
+
+        // 统计行
+        const stats = [];
+        stats.push(['到达关卡', `第${Math.min(isWin ? this.level + 1 : this.level, 25)}关`]);
+        if (this.courageCnt > 0) stats.push(['勇气时刻', `×${this.courageCnt}`]);
+        if (this.hitMines > 0) stats.push(['踩雷次数', String(this.hitMines)]);
+        if (this.scoreMult > 1) stats.push(['修饰器倍率', `×${this.scoreMult.toFixed(1)}`]);
+
+        const statY = 270;
+        const statGap = W / (stats.length + 1);
+        ctx.font = '700 18px system-ui, sans-serif';
+        stats.forEach((s, i) => {
+            const x = statGap * (i + 1);
+            ctx.fillStyle = '#58A6FF';
+            ctx.fillText(s[1], x, statY);
+            ctx.font = '400 11px system-ui, sans-serif';
+            ctx.fillStyle = '#6E7681';
+            ctx.fillText(s[0], x, statY + 18);
+            ctx.font = '700 18px system-ui, sans-serif';
+        });
+
+        // 底部装饰线
+        const lineGrad = ctx.createLinearGradient(60, 0, W - 60, 0);
+        lineGrad.addColorStop(0, 'transparent');
+        lineGrad.addColorStop(0.5, '#30363D');
+        lineGrad.addColorStop(1, 'transparent');
+        ctx.strokeStyle = lineGrad;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, 310); ctx.lineTo(W - 60, 310); ctx.stroke();
+
+        // 邀请文字
+        ctx.font = '400 14px system-ui, sans-serif';
+        ctx.fillStyle = '#8B949E';
+        ctx.textAlign = 'center';
+        ctx.fillText('你能超过我吗？来挑战 👉 ScanBoomBoom', W / 2, 340);
+
+        // 底部版本
+        ctx.font = '400 11px system-ui, sans-serif';
+        ctx.fillStyle = '#484F58';
+        ctx.fillText('ScanBoomBoom v1.8', W / 2, 375);
+
+        // 边框
+        ctx.strokeStyle = '#30363D';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, W - 2, H - 2);
+
+        // 导出
+        cvs.toBlob(blob => {
+            if (!blob) return;
+            const file = new File([blob], 'scanboom-result.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'ScanBoomBoom', text: '来挑战 ScanBoomBoom！' }).catch(() => {});
+            } else {
+                // 降级：下载图片
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'scanboom-result.png';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }
+        }, 'image/png');
     }
 
     // ==================== 存档 ====================

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ScanBoomBoom</title>
+    <meta name="description" content="60秒一局的神经刺激型扫雷游戏。连击、勇气时刻、红蓝雷、小丑雷、岩浆雷，25关挑战等你来！">
 
     <!-- PWA -->
     <link rel="manifest" href="manifest.json">
@@ -22,6 +23,11 @@
 <body>
     <!-- 主菜单 -->
     <div id="menuScreen" class="menu-screen">
+        <div class="menu-aux">
+            <button id="menuSettingsBtn" class="menu-aux-btn" title="设置">⚙️</button>
+            <button id="menuTutorialBtn" class="menu-aux-btn" title="新手教程">❓</button>
+            <button id="menuAchieveBtn" class="menu-aux-btn" title="成就">🏆</button>
+        </div>
         <div class="menu-content">
             <div class="menu-bomb" id="menuBomb">💣</div>
             <h1 class="menu-title" id="menuTitle">ScanBoomBoom</h1>
@@ -132,6 +138,7 @@
                 <div id="overlayRecord" class="overlay-record"></div>
                 <div class="overlay-buttons">
                     <button id="nextBtn" class="btn-primary hidden">下一关 ⭐</button>
+                    <button id="shareBtn" class="btn-secondary">📤 分享</button>
                     <button id="restartBtn" class="btn-secondary">重新开始</button>
                 </div>
             </div>
@@ -185,7 +192,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.7</small></span>
+                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.8</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
@@ -278,6 +285,73 @@
                 </div>
             </div>
         </div>
+
+        <!-- 新手教程叠层 -->
+        <div id="tutorialOverlay" class="tutorial-overlay">
+            <div class="tutorial-content">
+                <div class="tutorial-header">
+                    <span class="tutorial-title">❓ 新手教程</span>
+                    <button id="tutorialCloseBtn" class="tutorial-close">✖</button>
+                </div>
+                <div class="tutorial-body">
+                    <div class="tutorial-step">
+                        <div class="tutorial-step-icon">👆</div>
+                        <div class="tutorial-step-text">
+                            <b>点击翻开</b>
+                            <p>点击格子翻开，数字表示周围 8 格内的地雷数量。利用数字推理安全格位置。</p>
+                        </div>
+                    </div>
+                    <div class="tutorial-step">
+                        <div class="tutorial-step-icon">🚩</div>
+                        <div class="tutorial-step-text">
+                            <b>标记地雷</b>
+                            <p>确定是雷的格子可以标旗。推荐在设置中选择「长按标旗」模式，长按标旗、短按翻开。</p>
+                        </div>
+                    </div>
+                    <div class="tutorial-step">
+                        <div class="tutorial-step-icon">💡</div>
+                        <div class="tutorial-step-text">
+                            <b>和弦操作</b>
+                            <p>双击已翻开的数字格：当周围标旗数 = 数字时，自动翻开其余格子，加速扫雷！</p>
+                        </div>
+                    </div>
+                    <div class="tutorial-step">
+                        <div class="tutorial-step-icon">⚡</div>
+                        <div class="tutorial-step-text">
+                            <b>速度与连击</b>
+                            <p>连续翻开不踩雷可累积 Combo 倍率（≥5连 ×2，≥10连 ×3）。短时间多步翻开还能触发速推奖励时间！</p>
+                        </div>
+                    </div>
+                    <div class="tutorial-step">
+                        <div class="tutorial-step-icon">🎲</div>
+                        <div class="tutorial-step-text">
+                            <b>勇气奖励</b>
+                            <p>当逻辑无法继续推理时，大胆翻开任意一格即可获得勇气三重奖励：+30% 时间、+1 生命、+20% 得分！</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 成就叠层（占位） -->
+        <div id="achieveOverlay" class="achieve-overlay">
+            <div class="achieve-content">
+                <div class="achieve-header">
+                    <span class="achieve-title">🏆 成就</span>
+                    <button id="achieveCloseBtn" class="achieve-close">✖</button>
+                </div>
+                <div class="achieve-body">
+                    <div class="achieve-coming-soon">
+                        <div class="achieve-coming-icon">🚧</div>
+                        <p>成就系统开发中…</p>
+                        <p class="achieve-coming-sub">敬请期待！</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- 分享画布（隐藏） -->
+    <canvas id="shareCanvas" style="display:none"></canvas>
 
     <script src="js/board.js"></script>
     <script src="js/renderer.js"></script>
