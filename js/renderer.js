@@ -44,6 +44,15 @@ class Renderer {
         this.magmaSplashes = [];
         this.magmaFlash = null;
 
+        // 时间紧张呼吸光晕
+        this.timeWarning = false;
+
+        // 脏标记：有动画或状态变化时需要重绘
+        this.dirty = true;
+
+        // 无伤通关特效
+        this.noDmgAnim = null;
+
         // 配色
         this.C = {
             hidden:   '#2A313A',
@@ -74,6 +83,9 @@ class Renderer {
         this.jokerFlash = null;
         this.magmaSplashes = [];
         this.magmaFlash = null;
+        this.timeWarning = false;
+        this.noDmgAnim = null;
+        this.dirty = true;
         this.canvas.style.transform = '';
         this.resize();
     }
@@ -116,6 +128,7 @@ class Renderer {
         const now = performance.now();
         for (const { x, y, dist } of cells)
             this.reveals.push({ x, y, start: now, delay: dist * 40, dur: 200 });
+        this.dirty = true;
     }
 
     animateExplosion(x, y, color) {
@@ -123,12 +136,14 @@ class Renderer {
         this.shakeEnd = performance.now() + 200;
         this.shakeDur = 200;
         this.shakeAmp = 6;
+        this.dirty = true;
     }
 
     animateRevealMines(mines) {
         const now = performance.now();
         for (let i = 0; i < mines.length; i++)
             this.reveals.push({ x: mines[i].x, y: mines[i].y, start: now, delay: i * 60, dur: 200 });
+        this.dirty = true;
     }
 
     /** 时间到：依次翻出所有雷 + 每颗雷爆炸 + 强震 */
@@ -148,6 +163,10 @@ class Renderer {
 
     animateVictory() {
         this.victoryAnim = { start: performance.now(), dur: 800 };
+    }
+
+    animateNoDamage() {
+        this.noDmgAnim = { start: performance.now(), dur: 1200 };
     }
 
     animateCourage(intensity) {
@@ -209,6 +228,16 @@ class Renderer {
         const ctx = this.ctx, board = this.board;
         if (!board) return;
 
+        // 检查是否有活跃动画
+        const hasAnim = this.reveals.length > 0 || this.explosion ||
+            now < this.shakeEnd || this.victoryAnim || this.courageAnim ||
+            this.timeoutFlash || this.jokerReverts.length > 0 || this.jokerFlash ||
+            this.magmaSplashes.length > 0 || this.magmaFlash || this.timeWarning ||
+            this.noDmgAnim;
+
+        if (!this.dirty && !hasAnim) return;
+        this.dirty = false;
+
         ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
         ctx.clearRect(0, 0, this.boardW, this.boardH);
 
@@ -253,14 +282,30 @@ class Renderer {
                 } else if (c.flagged && !c.revealed) {
                     this._drawFlagged(ctx, px, py);
                 } else if (animT !== undefined && animT >= 0) {
-                    const ease = this._easeOutBack(animT);
-                    this._drawHidden(ctx, px, py, x, y);
-                    ctx.save();
-                    ctx.globalAlpha = Math.min(animT * 2.5, 1);
-                    const cx = px + this.cellSize / 2, cy = py + this.cellSize / 2;
-                    ctx.translate(cx, cy); ctx.scale(ease, ease); ctx.translate(-cx, -cy);
-                    this._drawRevealed(ctx, px, py, c);
-                    ctx.restore();
+                    // 3D 翻牌效果：前半收窄（隐藏面），后半展开（显示内容）
+                    if (animT < 0.5) {
+                        // 前半：隐藏面缩窄
+                        const flipT = animT / 0.5; // 0→1
+                        const scaleX = 1 - flipT;  // 1→0
+                        ctx.save();
+                        const ccx = px + this.cellSize / 2;
+                        ctx.translate(ccx, 0);
+                        ctx.scale(Math.max(0.02, scaleX), 1);
+                        ctx.translate(-ccx, 0);
+                        this._drawHidden(ctx, px, py, x, y);
+                        ctx.restore();
+                    } else {
+                        // 后半：内容面展开
+                        const flipT = (animT - 0.5) / 0.5; // 0→1
+                        const scaleX = flipT; // 0→1
+                        ctx.save();
+                        const ccx = px + this.cellSize / 2;
+                        ctx.translate(ccx, 0);
+                        ctx.scale(Math.max(0.02, scaleX), 1);
+                        ctx.translate(-ccx, 0);
+                        this._drawRevealed(ctx, px, py, c);
+                        ctx.restore();
+                    }
                 } else if (animT !== undefined) {
                     this._drawHidden(ctx, px, py, x, y);
                 } else {
@@ -383,6 +428,56 @@ class Renderer {
                 ctx.restore();
             } else if (t >= 1) {
                 this.magmaFlash = null;
+            }
+        }
+
+        // 时间紧张呼吸光晕（≤10s 红色脉冲边缘）
+        if (this.timeWarning) {
+            ctx.save();
+            const pulse = Math.sin(now * 0.004) * 0.5 + 0.5; // 0~1 oscillation
+            const alpha = 0.12 + pulse * 0.18;
+            const grad = ctx.createRadialGradient(
+                this.boardW / 2, this.boardH / 2, Math.min(this.boardW, this.boardH) * 0.35,
+                this.boardW / 2, this.boardH / 2, Math.max(this.boardW, this.boardH) * 0.7
+            );
+            grad.addColorStop(0, 'rgba(248,81,73,0)');
+            grad.addColorStop(1, `rgba(248,81,73,${alpha})`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, this.boardW, this.boardH);
+            ctx.restore();
+        }
+
+        // 无伤通关金色波纹 + 盾牌
+        if (this.noDmgAnim) {
+            const t = (now - this.noDmgAnim.start) / this.noDmgAnim.dur;
+            if (t >= 0 && t < 1) {
+                ctx.save();
+                // 金色波纹从中心向外扩散
+                const waveR = t * Math.max(this.boardW, this.boardH) * 0.8;
+                const waveAlpha = 0.35 * (1 - t);
+                const waveGrad = ctx.createRadialGradient(
+                    this.boardW / 2, this.boardH / 2, Math.max(0, waveR - 30),
+                    this.boardW / 2, this.boardH / 2, waveR
+                );
+                waveGrad.addColorStop(0, 'rgba(240,192,64,0)');
+                waveGrad.addColorStop(0.5, `rgba(240,192,64,${waveAlpha})`);
+                waveGrad.addColorStop(1, 'rgba(240,192,64,0)');
+                ctx.fillStyle = waveGrad;
+                ctx.fillRect(0, 0, this.boardW, this.boardH);
+
+                // 中央盾牌图标
+                if (t < 0.7) {
+                    const shieldAlpha = t < 0.15 ? t / 0.15 : (0.7 - t) / 0.55;
+                    const shieldSize = (Math.min(this.boardW, this.boardH) * 0.25) | 0;
+                    ctx.globalAlpha = shieldAlpha * 0.9;
+                    ctx.font = `${shieldSize}px serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🛡️', this.boardW / 2, this.boardH / 2);
+                }
+                ctx.restore();
+            } else if (t >= 1) {
+                this.noDmgAnim = null;
             }
         }
     }

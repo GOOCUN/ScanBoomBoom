@@ -8,7 +8,7 @@
 //
 // 更新方式：修改 CACHE_VERSION 的数字，用户下次打开会自动更新
 
-const CACHE_VERSION = 'scanboom-v1.6';
+const CACHE_VERSION = 'scanboom-v1.7';
 
 const ASSETS_TO_CACHE = [
     './',

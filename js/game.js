@@ -71,12 +71,27 @@ function getBlueTimePenalty(level) {
     return 1 / 2;
 }
 
-// 特殊雷分配（L6+：小丑雷或岩浆雷随机出现一种）
+// 特殊雷分配（按关卡递进）
 function getSpecialMine(level) {
     if (level < 6) return { joker: 0, magma: 0 };
-    return Math.random() < 0.5
-        ? { joker: 1, magma: 0 }
-        : { joker: 0, magma: 1 };
+    if (level <= 9) {
+        // L6-9：随机1个小丑或1个岩浆
+        return Math.random() < 0.5
+            ? { joker: 1, magma: 0 }
+            : { joker: 0, magma: 1 };
+    }
+    if (level <= 14) {
+        // L10-14：各1个
+        return { joker: 1, magma: 1 };
+    }
+    if (level <= 19) {
+        // L15-19：总数2，随机分配
+        const j = Math.floor(Math.random() * 3); // 0,1,2
+        return { joker: j, magma: 2 - j };
+    }
+    // L20+：总数3，随机分配
+    const j = Math.floor(Math.random() * 4); // 0,1,2,3
+    return { joker: j, magma: 3 - j };
 }
 
 // ==================== 存档 ====================
@@ -334,8 +349,9 @@ class Game {
         this.canvas.addEventListener('mousemove', e => {
             const r = this.canvas.getBoundingClientRect();
             this.renderer.hoverCell = this.renderer.hitTest(e.clientX - r.left, e.clientY - r.top);
+            this.renderer.dirty = true;
         });
-        this.canvas.addEventListener('mouseleave', () => { this.renderer.hoverCell = null; });
+        this.canvas.addEventListener('mouseleave', () => { this.renderer.hoverCell = null; this.renderer.dirty = true; });
 
         window.addEventListener('resize', () => this.renderer.resize());
 
@@ -461,7 +477,6 @@ class Game {
         const shown = [...alwaysKeys, ...poolKeys.slice(0, 3)];
 
         this.el.modList.innerHTML = '';
-        this.el.modDots.innerHTML = '';
         for (let idx = 0; idx < shown.length; idx++) {
             const key = shown[idx];
             const m = MODIFIERS[key];
@@ -487,25 +502,7 @@ class Game {
                 this._updateModMult();
             });
             this.el.modList.appendChild(card);
-
-            // dot indicator
-            const dot = document.createElement('span');
-            dot.className = 'dot' + (idx === 0 ? ' active' : '');
-            this.el.modDots.appendChild(dot);
         }
-
-        // Scroll snap dot sync
-        this.el.modList.scrollLeft = 0;
-        this.el.modList.onscroll = () => {
-            const scrollLeft = this.el.modList.scrollLeft;
-            const cardW = this.el.modList.firstElementChild?.offsetWidth || 140;
-            const gap = 12;
-            const idx = Math.round(scrollLeft / (cardW + gap));
-            const dots = this.el.modDots.children;
-            for (let i = 0; i < dots.length; i++) {
-                dots[i].classList.toggle('active', i === idx);
-            }
-        };
 
         this.el.modOverlay.classList.add('active');
     }
@@ -781,7 +778,7 @@ class Game {
             this._initAudio();
         }
         const ok = this.board.toggleFlag(pos.x, pos.y);
-        if (ok) this._uiMineCount();
+        if (ok) { this._uiMineCount(); this.renderer.dirty = true; }
         if (ok && this.flagMode && this.settings.flagMode === 'auto') {
             this.flagMode = false;
             this.el.flagBtn.textContent = '⛏️';
@@ -830,7 +827,6 @@ class Game {
 
     _onMine(result) {
         if (this.state !== 'playing') return; // 防止chord多雷重复触发
-        this.hitMines++;
         this.combo = 0;
         this.rushClicks = [];
         this._uiRush();
@@ -843,7 +839,8 @@ class Game {
         this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
 
         if (isJoker) {
-            // 小丑雷：清旗 + 回退50%已翻开的格子
+            // 小丑雷：扣命（不触发递增扣分）+ 清旗 + 回退50%已翻开的格子
+            this.lives--;
             cell.joker = false;
             cell.revealed = false;
             if (this.board.blueMineRatio > 0 && Math.random() < this.board.blueMineRatio) {
@@ -853,6 +850,7 @@ class Game {
             this.board.clearAllFlags();
             const reverted = this.board.revertRevealedCells(0.5);
 
+            this._uiLives();
             this.renderer.animateExplosion(result.x, result.y, '#BC8CFF');
             this.renderer.animateJokerRevert(reverted);
             this._playSound('joker');
@@ -860,14 +858,17 @@ class Game {
 
             const { px, py } = this._boardToFloat(result.x, result.y);
             this.floats.spawn('🤡 小丑!', px, py, '#BC8CFF', true);
+            this.floats.spawn('💔 -1', px, py - 28, '#BC8CFF');
             if (reverted.length > 0) {
-                this.floats.spawn(`↩ ${reverted.length}格回退`, px, py - 32, '#BC8CFF');
+                this.floats.spawn(`↩ ${reverted.length}格回退`, px, py - 56, '#BC8CFF');
             }
 
             this._uiCombo();
             this._uiMineCount();
+            if (this.lives <= 0) this._endGame('dead');
         } else if (isMagma) {
             // 岩浆雷：扣命 + 扣分 + 溅射
+            this.hitMines++;
             this.lives--;
             const magmaPenalty = 50 * Math.pow(2, this.hitMines - 1);
             this.totalScore = Math.max(0, this.totalScore - magmaPenalty);
@@ -903,6 +904,7 @@ class Game {
             }
         } else if (isBlue) {
             // 蓝雷：按关卡扣时间，不扣命
+            this.hitMines++;
             const timeLoss = Math.ceil(this.time * getBlueTimePenalty(this.level));
             this.time = Math.max(0, this.time - timeLoss);
             const bluePenalty = 50 * Math.pow(2, this.hitMines - 1);
@@ -924,6 +926,7 @@ class Game {
             if (this.time <= 0) this._endGame('time');
         } else {
             // 红雷：扣命
+            this.hitMines++;
             this.lives--;
             const penalty = 50 * Math.pow(2, this.hitMines - 1);
             this.totalScore = Math.max(0, this.totalScore - penalty);
@@ -1006,6 +1009,7 @@ class Game {
             this.levelScore += noDmgBonus;
             this.noDmgBonus = noDmgBonus;
             this.scoreBreakdown.noDmgBonus = noDmgBonus;
+            this.renderer.animateNoDamage();
         } else {
             this.noDmgBonus = 0;
             this.scoreBreakdown.noDmgBonus = 0;
@@ -1653,6 +1657,7 @@ class Game {
                 this.lastTick = now;
                 this.time -= dt;
                 this._uiTimer();
+                this.renderer.timeWarning = this.time > 0 && this.time <= 10;
                 if (this.time <= 0) {
                     this.time = 0;
                     this._endGame('time');
