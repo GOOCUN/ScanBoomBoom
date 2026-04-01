@@ -119,6 +119,59 @@ function clearSave() {
     try { localStorage.removeItem(SAVE_KEY); } catch {}
 }
 
+// ==================== 成就系统 ====================
+const STATS_KEY = 'scanboom_stats';
+const ACHIEVE_KEY = 'scanboom_achievements';
+
+function loadStats() {
+    try {
+        const d = JSON.parse(localStorage.getItem(STATS_KEY));
+        return d || {};
+    } catch { return {}; }
+}
+function saveStats(s) {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(s)); } catch {}
+}
+function loadAchievements() {
+    try {
+        const d = JSON.parse(localStorage.getItem(ACHIEVE_KEY));
+        return d || {};
+    } catch { return {}; }
+}
+function saveAchievements(a) {
+    try { localStorage.setItem(ACHIEVE_KEY, JSON.stringify(a)); } catch {}
+}
+
+// 成就定义：每个成就有 id, icon, name, desc, tiers (铜/银/金 阈值数组), check(stats) → 当前值
+const ACHIEVEMENTS = [
+    // === 里程碑 ===
+    { id: 'firstClear', icon: '🎯', name: '初出茅庐', desc: '通过第 1 关', tiers: [1], check: s => s.totalRuns > 0 ? (s.levelClears || 0) : 0, category: '里程碑' },
+    { id: 'fullClear', icon: '🏔️', name: '登峰造极', desc: '通关第 25 关（完成一周目）', tiers: [1, 5, 10], check: s => s.totalClears || 0, category: '里程碑' },
+    { id: 'richScore', icon: '💰', name: '万分富翁', desc: '单周目总分 ≥ 阈值', tiers: [10000, 30000, 50000], check: s => s.bestRunScore || 0, category: '里程碑', tierLabels: ['≥1万', '≥3万', '≥5万'] },
+
+    // === 技巧类 ===
+    { id: 'ironWall', icon: '🛡️', name: '铁壁', desc: '一周目内无伤通关次数', tiers: [5, 15, 25], check: s => s.bestRunNoDmg || 0, category: '技巧' },
+    { id: 'lightning', icon: '⚡', name: '闪电手', desc: 'L8+ 关卡实际用时 ≤ 30%基础时间', tiers: [1, 5, 10], check: s => s.fastWins || 0, category: '技巧' },
+    { id: 'chainMaster', icon: '🔥', name: '连锁大师', desc: '单次翻开格数', tiers: [10, 15, 20], check: s => s.maxChain || 0, category: '技巧', tierLabels: ['≥10格', '≥15格', '≥20格'] },
+    { id: 'fateChild', icon: '🎲', name: '命运之子', desc: '累计触发勇气奖励', tiers: [10, 100, 500], check: s => s.totalCourage || 0, category: '技巧' },
+
+    // === 挑战类 ===
+    { id: 'allInMaster', icon: '💀', name: '孤注一掷大师', desc: '用孤注一掷完成一周目', tiers: [1, 3, 5], check: s => s.allInClears || 0, category: '挑战' },
+    { id: 'blindMaster', icon: '🚫', name: '盲人摸象', desc: '用盲扫大师完成一周目', tiers: [1, 3, 5], check: s => s.noFlagClears || 0, category: '挑战' },
+    { id: 'slowIsFast', icon: '🤔', name: '慢即是快', desc: '用优柔寡断完成一周目', tiers: [1, 3, 5], check: s => s.chillFullClears || 0, category: '挑战' },
+
+    // === 惩罚类 ===
+    { id: 'jokerHunter', icon: '🤡', name: '小丑收割者', desc: '累计踩到小丑雷', tiers: [10, 100, 500], check: s => s.jokerHits || 0, category: '惩罚' },
+    { id: 'magmaBody', icon: '🌋', name: '岩浆体质', desc: '累计踩到岩浆雷', tiers: [10, 100, 500], check: s => s.magmaHits || 0, category: '惩罚' },
+    { id: 'clutch', icon: '💔', name: '九死一生', desc: '1命 + 剩余≤3s 通关', tiers: [1, 5, 10], check: s => s.clutchWins || 0, category: '惩罚' },
+    { id: 'neverGiveUp', icon: '💪', name: '永不言败', desc: '累计开始游戏次数（未通关25关）', tiers: [500, 1000, 2000], check: s => { const runs = s.totalRuns || 0; const clears = s.totalClears || 0; return clears === 0 ? runs : 0; }, category: '惩罚' },
+
+    // === 累计类 ===
+    { id: 'revealPro', icon: '📦', name: '翻格达人', desc: '累计翻开格数', tiers: [5000, 20000, 50000], check: s => s.totalRevealed || 0, category: '累计' },
+    { id: 'flagPro', icon: '🚩', name: '旗手', desc: '累计标旗次数', tiers: [500, 2000, 5000], check: s => s.totalFlags || 0, category: '累计' },
+    { id: 'combo10', icon: '🏅', name: 'Combo 大师', desc: '达成 10+ 连击', tiers: [20, 100, 500], check: s => s.combo10Count || 0, category: '累计' },
+];
+
 // ==================== 飘分系统 ====================
 class FloatManager {
     constructor(container) {
@@ -153,6 +206,14 @@ class Game {
         this.courageCnt = 0; // 本轮对局勇气时刻次数
         this.records = loadRecords();
         this.settings = loadSettings();
+        this.stats = loadStats();
+        this.achievements = loadAchievements();
+
+        // 周目内追踪（不跨存档）
+        this.runNoDmgCount = 0;   // 本周目无伤通关次数
+        this.runAllIn = false;    // 本周目是否始终使用孤注一掷
+        this.runNoFlag = false;   // 本周目是否始终使用盲扫
+        this.runChill = false;    // 本周目是否始终使用优柔寡断
 
         // 单关状态
         this.state = 'idle'; // idle | playing | paused | courage | ended
@@ -236,6 +297,7 @@ class Game {
             tutorialCloseBtn: document.getElementById('tutorialCloseBtn'),
             achieveOverlay:  document.getElementById('achieveOverlay'),
             achieveCloseBtn: document.getElementById('achieveCloseBtn'),
+            achieveBody:     document.querySelector('.achieve-body'),
             shareBtn:        document.getElementById('shareBtn'),
             shareCanvas:     document.getElementById('shareCanvas'),
         };
@@ -590,6 +652,10 @@ class Game {
         this.lives = save.lives;
         this.combo = save.combo || 0;
         this.courageCnt = save.courageCnt || 0;
+        this.runNoDmgCount = 0;
+        this.runAllIn = true;
+        this.runNoFlag = true;
+        this.runChill = true;
 
         // 爆炸过渡
         this.el.menuContinueBtn.disabled = true;
@@ -628,6 +694,12 @@ class Game {
             this.lives = this.MAX_LIVES;
             this.combo = 0;
             this.courageCnt = 0;
+            this.runNoDmgCount = 0;
+            this.runAllIn = true;
+            this.runNoFlag = true;
+            this.runChill = true;
+            this.stats.totalRuns = (this.stats.totalRuns || 0) + 1;
+            saveStats(this.stats);
             this._showModifierSelection();
         }, 600);
     }
@@ -697,6 +769,65 @@ class Game {
 
     _toggleAchieve() {
         this.el.achieveOverlay.classList.toggle('active');
+        if (this.el.achieveOverlay.classList.contains('active')) {
+            this._renderAchievePage();
+        }
+    }
+
+    _checkAchievements() {
+        const unlocks = [];
+        for (const ach of ACHIEVEMENTS) {
+            const val = ach.check(this.stats);
+            const prev = this.achievements[ach.id] || 0; // 0=none, 1=铜, 2=银, 3=金
+            let newTier = prev;
+            for (let t = 0; t < ach.tiers.length; t++) {
+                if (val >= ach.tiers[t]) newTier = t + 1;
+            }
+            if (newTier > prev) {
+                this.achievements[ach.id] = newTier;
+                unlocks.push({ ...ach, tier: newTier });
+            }
+        }
+        if (unlocks.length > 0) saveAchievements(this.achievements);
+        return unlocks;
+    }
+
+    _renderAchievePage() {
+        const body = this.el.achieveBody;
+        const tierNames = ['', '🥉', '🥈', '🥇'];
+        const tierColors = ['', '#CD7F32', '#C0C0C0', '#FFD700'];
+        let html = '';
+        let lastCat = '';
+        for (const ach of ACHIEVEMENTS) {
+            if (ach.category !== lastCat) {
+                lastCat = ach.category;
+                html += `<div class="achieve-category">${lastCat}</div>`;
+            }
+            const tier = this.achievements[ach.id] || 0;
+            const val = ach.check(this.stats);
+            const maxTier = ach.tiers.length;
+            const nextThreshold = tier < maxTier ? ach.tiers[tier] : ach.tiers[maxTier - 1];
+            const progress = tier >= maxTier ? 100 : Math.min(100, Math.round(val / nextThreshold * 100));
+
+            html += `<div class="achieve-item ${tier > 0 ? 'unlocked' : ''}">`;
+            html += `<div class="achieve-item-icon">${ach.icon}</div>`;
+            html += `<div class="achieve-item-info">`;
+            html += `<div class="achieve-item-name">${ach.name} ${tier > 0 ? tierNames[tier] : ''}</div>`;
+            html += `<div class="achieve-item-desc">${ach.desc}</div>`;
+            // 进度条
+            html += `<div class="achieve-progress-wrap">`;
+            html += `<div class="achieve-progress-bar" style="width:${progress}%;background:${tier > 0 ? tierColors[tier] : '#30363D'}"></div>`;
+            html += `</div>`;
+            // 阈值标签
+            const labels = ach.tiers.map((t, i) => {
+                const label = ach.tierLabels ? ach.tierLabels[i] : t;
+                const done = tier > i;
+                return `<span class="achieve-tier ${done ? 'done' : ''}">${tierNames[i + 1]} ${label}</span>`;
+            });
+            html += `<div class="achieve-tiers">${labels.join('')}</div>`;
+            html += `</div></div>`;
+        }
+        body.innerHTML = html;
     }
 
     // ==================== 关卡控制 ====================
@@ -730,6 +861,11 @@ class Game {
         this.lastTick = 0;
         this.levelScore = 0;
         this.hitMines = 0;
+
+        // 跟踪修饰器一周目一致性
+        if (!this.activeMods.has('allIn')) this.runAllIn = false;
+        if (!this.activeMods.has('noFlag')) this.runNoFlag = false;
+        if (!this.activeMods.has('chill')) this.runChill = false;
 
         // 分数明细跟踪
         this.scoreBreakdown = {
@@ -813,7 +949,13 @@ class Game {
             this._initAudio();
         }
         const ok = this.board.toggleFlag(pos.x, pos.y);
-        if (ok) { this._uiMineCount(); this.renderer.dirty = true; }
+        if (ok) {
+            this._uiMineCount();
+            this.renderer.dirty = true;
+            // 统计标旗（只计标旗动作，不计取消）
+            const c = this.board.cell(pos.x, pos.y);
+            if (c && c.flagged) this.stats.totalFlags = (this.stats.totalFlags || 0) + 1;
+        }
         if (ok && this.flagMode && this.settings.flagMode === 'auto') {
             this.flagMode = false;
             this.el.flagBtn.textContent = '⛏️';
@@ -876,6 +1018,7 @@ class Game {
         if (isJoker) {
             // 小丑雷：扣命（不触发递增扣分）+ 清旗 + 回退50%已翻开的格子
             this.lives--;
+            this.stats.jokerHits = (this.stats.jokerHits || 0) + 1;
             cell.joker = false;
             cell.revealed = false;
             if (this.board.blueMineRatio > 0 && Math.random() < this.board.blueMineRatio) {
@@ -905,6 +1048,7 @@ class Game {
             // 岩浆雷：扣命 + 扣分 + 溅射
             this.hitMines++;
             this.lives--;
+            this.stats.magmaHits = (this.stats.magmaHits || 0) + 1;
             const magmaPenalty = 50 * Math.pow(2, this.hitMines - 1);
             this.totalScore = Math.max(0, this.totalScore - magmaPenalty);
             this.scoreBreakdown.penalty += magmaPenalty;
@@ -993,6 +1137,11 @@ class Game {
         this.levelScore += points;
         this.totalScore += points;
 
+        // 统计追踪
+        this.stats.totalRevealed = (this.stats.totalRevealed || 0) + n;
+        if (n > (this.stats.maxChain || 0)) this.stats.maxChain = n;
+        if (this.combo >= 10) this.stats.combo10Count = (this.stats.combo10Count || 0) + 1;
+
         // 分数明细
         const rawBase = Math.round((n * 10 + Math.max(0, n - 1) * 5) * this.scoreMult);
         this.scoreBreakdown.base += rawBase;
@@ -1059,6 +1208,7 @@ class Game {
         const n = cells.length;
         this.combo += n;
         this.courageCnt++;
+        this.stats.totalCourage = (this.stats.totalCourage || 0) + 1;
         this._haptic('courage');
 
         // 固定奖励 1：+30% 总时间
@@ -1169,6 +1319,45 @@ class Game {
         this.state = 'ended';
         const isWin = reason === 'win';
 
+        // === 成就统计更新 ===
+        if (isWin) {
+            this.stats.levelClears = (this.stats.levelClears || 0) + 1;
+
+            // 无伤通关计数
+            if (this.hitMines === 0) this.runNoDmgCount++;
+            if (this.runNoDmgCount > (this.stats.bestRunNoDmg || 0)) {
+                this.stats.bestRunNoDmg = this.runNoDmgCount;
+            }
+
+            // 闪电手：L8+ 实际用时 ≤ 30% 基础时间
+            const timeSpent = this.maxTime - this.time;
+            if (this.level >= 8 && timeSpent <= this.maxTime * 0.3) {
+                this.stats.fastWins = (this.stats.fastWins || 0) + 1;
+            }
+
+            // 九死一生：1命 + 剩余≤3s
+            if (this.lives === 1 && this.time <= 3) {
+                this.stats.clutchWins = (this.stats.clutchWins || 0) + 1;
+            }
+
+            // 第25关通关 → 一周目完成
+            if (this.level >= 25) {
+                this.stats.totalClears = (this.stats.totalClears || 0) + 1;
+                // 最高单周目得分
+                if (this.totalScore > (this.stats.bestRunScore || 0)) {
+                    this.stats.bestRunScore = this.totalScore;
+                }
+                // 修饰器一周目成就
+                if (this.runAllIn) this.stats.allInClears = (this.stats.allInClears || 0) + 1;
+                if (this.runNoFlag) this.stats.noFlagClears = (this.stats.noFlagClears || 0) + 1;
+                if (this.runChill) this.stats.chillFullClears = (this.stats.chillFullClears || 0) + 1;
+            }
+        }
+        saveStats(this.stats);
+
+        // 检查新解锁成就
+        const newUnlocks = this._checkAchievements();
+
         if (isWin) {
             this.lives = Math.min(this.MAX_LIVES, this.lives + 1);
             this._uiLives();
@@ -1250,6 +1439,20 @@ class Game {
                 ? '🏆 新纪录！'
                 : `最高: 第${this.records.bestLevel}关 · ${this.records.bestScore}分`;
             this.el.record.classList.toggle('new-record', isNewRecord);
+
+            // 显示新解锁成就
+            const unlockDiv = document.getElementById('achieveUnlocks');
+            if (newUnlocks.length > 0) {
+                const tierNames = ['', '🥉 铜', '🥈 银', '🥇 金'];
+                unlockDiv.innerHTML = newUnlocks.map(u =>
+                    `<div class="achieve-unlock-item">${u.icon} ${u.name} <span class="achieve-unlock-tier">${tierNames[u.tier]}</span></div>`
+                ).join('');
+                unlockDiv.style.display = '';
+            } else {
+                unlockDiv.innerHTML = '';
+                unlockDiv.style.display = 'none';
+            }
+
             this.el.overlay.classList.add('active');
         }, reason === 'time' ? 1200 : delay);
     }
@@ -1366,7 +1569,7 @@ class Game {
         // 底部版本
         ctx.font = '400 11px system-ui, sans-serif';
         ctx.fillStyle = '#484F58';
-        ctx.fillText('ScanBoomBoom v1.8', W / 2, 375);
+        ctx.fillText('ScanBoomBoom v1.9', W / 2, 375);
 
         // 边框
         ctx.strokeStyle = '#30363D';
