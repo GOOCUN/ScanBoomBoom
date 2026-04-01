@@ -1685,8 +1685,12 @@ class Game {
         if (isWin) {
             this.stats.levelClears = (this.stats.levelClears || 0) + 1;
 
-            // 无伤通关计数
-            if (this.hitMines === 0) this.runNoDmgCount++;
+            // 无伤通关计数（踩雷即断链）
+            if (this.hitMines === 0) {
+                this.runNoDmgCount++;
+            } else {
+                this.runNoDmgCount = 0;
+            }
             if (this.runNoDmgCount > (this.stats.bestRunNoDmg || 0)) {
                 this.stats.bestRunNoDmg = this.runNoDmgCount;
             }
