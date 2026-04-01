@@ -610,19 +610,30 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 .btn-tertiary:active { transform: scale(.94); }
 .btn-tertiary:hover { color: #C9D1D9; border-color: #484F58; }
 
-/* 暂停确认弹窗 */
+/* 暂停确认弹窗（居中浮层） */
 .pause-confirm {
-    margin-top: 16px; padding: 14px; border-radius: 12px;
+    position: fixed; inset: 0; z-index: 10001;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, .55);
+}
+.pause-confirm-inner {
     background: #161B22; border: 1px solid #30363D;
+    border-radius: 14px; padding: 22px 24px;
+    max-width: 300px; width: 85%; text-align: center;
+    animation: confirm-pop .25s ease-out;
 }
 .pause-confirm-text {
-    font-size: 13px; color: #C9D1D9; margin-bottom: 12px; line-height: 1.6;
+    font-size: 13px; color: #C9D1D9; margin-bottom: 16px; line-height: 1.6;
 }
 .pause-confirm-btns {
     display: flex; gap: 10px; justify-content: center;
 }
 .pause-confirm-btns .btn-secondary {
     width: auto; padding: 8px 20px; font-size: 13px;
+}
+@keyframes confirm-pop {
+    0% { transform: scale(.85); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
 }
 .pause-content .btn-primary {
     display: block; width: 200px; margin: 0 auto;
@@ -710,7 +721,7 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 }
 
 /* ============================================
-   成就叠层（占位）
+   成就墙
    ============================================ */
 .achieve-overlay {
     position: fixed; inset: 0; z-index: 310;
@@ -720,7 +731,7 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
 }
 .achieve-overlay.active { opacity: 1; pointer-events: auto; }
 .achieve-content {
-    width: 92%; max-width: 380px; max-height: 85vh;
+    width: 92%; max-width: 400px; max-height: 88vh;
     background: #161B22; border: 1px solid #30363D; border-radius: 16px;
     display: flex; flex-direction: column; overflow: hidden;
 }
@@ -728,47 +739,132 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 18px; border-bottom: 1px solid #21262D;
 }
+.achieve-header-btns { display: flex; gap: 4px; align-items: center; }
 .achieve-title { font-size: 18px; font-weight: 800; color: #C9D1D9; }
 .achieve-close {
     background: none; border: none; color: #8B949E; font-size: 18px;
     cursor: pointer; padding: 4px 8px; transition: color .15s;
 }
 .achieve-close:hover { color: #F85149; }
-.achieve-body {
-    padding: 16px 14px; overflow-y: auto; max-height: 65vh;
+.achieve-share-btn {
+    background: none; border: none; font-size: 18px;
+    cursor: pointer; padding: 4px 8px; transition: transform .15s;
 }
-.achieve-category {
-    font-size: 12px; font-weight: 700; color: #58A6FF;
-    margin: 14px 0 6px; padding-left: 2px; text-transform: uppercase;
+.achieve-share-btn:active { transform: scale(0.9); }
+.achieve-body {
+    padding: 12px 10px; overflow-y: auto; max-height: 70vh;
+}
+
+/* 类别标题 */
+.aw-category {
+    font-size: 11px; font-weight: 700; color: #58A6FF;
+    margin: 14px 0 6px; padding-left: 4px; text-transform: uppercase;
     letter-spacing: 1px;
 }
-.achieve-category:first-child { margin-top: 0; }
-.achieve-item {
-    display: flex; gap: 10px; align-items: flex-start;
-    padding: 10px; border-radius: 10px;
-    background: #0D1117; border: 1px solid #21262D;
-    margin-bottom: 6px; opacity: 0.5;
-    transition: opacity .2s;
+.aw-category:first-child { margin-top: 0; }
+
+/* 3列网格 */
+.aw-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
 }
-.achieve-item.unlocked { opacity: 1; border-color: #30363D; }
-.achieve-item-icon { font-size: 28px; flex-shrink: 0; }
-.achieve-item-info { flex: 1; min-width: 0; }
-.achieve-item-name { font-size: 14px; font-weight: 700; color: #C9D1D9; }
-.achieve-item-desc { font-size: 11px; color: #6E7681; margin-top: 2px; }
-.achieve-progress-wrap {
+
+/* 成就卡片 */
+.aw-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 4px 10px; border-radius: 12px;
+    background: #0D1117;
+    border: 1.5px solid var(--tier-color, #21262D);
+    cursor: pointer; transition: transform .15s, box-shadow .15s;
+    position: relative; overflow: hidden;
+}
+.aw-card:active { transform: scale(0.95); }
+.aw-card.aw-unlocked {
+    box-shadow: 0 0 12px color-mix(in srgb, var(--tier-color) 30%, transparent);
+}
+.aw-card.aw-unlocked::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 70%);
+    pointer-events: none;
+}
+.aw-card.aw-locked {
+    opacity: 0.4; border-color: #21262D;
+}
+.aw-icon { font-size: 28px; line-height: 1; }
+.aw-name {
+    font-size: 11px; font-weight: 700; color: #C9D1D9;
+    margin-top: 6px; text-align: center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
+}
+.aw-val {
+    font-size: 10px; font-weight: 600; color: #484F58;
+    margin-top: 3px;
+}
+
+/* 成就检视叠层 */
+.aw-inspect-overlay {
+    position: fixed; inset: 0; z-index: 330;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+}
+.aw-inspect-overlay.active { opacity: 1; pointer-events: auto; }
+.aw-ins-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+}
+.aw-ins-card {
+    position: relative; z-index: 1;
+    width: 280px; padding: 28px 20px 20px;
+    background: #161B22; border: 2px solid var(--tier-color, #30363D);
+    border-radius: 16px; text-align: center;
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    animation: aw-ins-appear .3s ease-out;
+}
+@keyframes aw-ins-appear {
+    0% { transform: scale(0.7); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.aw-ins-icon { font-size: 56px; line-height: 1; }
+.aw-ins-name {
+    font-size: 20px; font-weight: 800; color: #C9D1D9;
+    margin-top: 10px;
+}
+.aw-ins-desc {
+    font-size: 12px; color: #8B949E; margin-top: 4px;
+}
+.aw-ins-val {
+    font-size: 28px; font-weight: 900; margin-top: 10px;
+}
+.aw-ins-progress {
     height: 4px; background: #21262D; border-radius: 2px;
-    margin-top: 6px; overflow: hidden;
+    margin: 10px 0 0; overflow: hidden;
 }
-.achieve-progress-bar {
+.aw-ins-bar {
     height: 100%; border-radius: 2px; transition: width .3s;
 }
-.achieve-tiers {
-    display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap;
+.aw-ins-time {
+    font-size: 11px; color: #6E7681; margin-top: 8px;
 }
-.achieve-tier {
-    font-size: 10px; color: #484F58;
+.aw-ins-conds {
+    margin-top: 12px; text-align: left;
 }
-.achieve-tier.done { color: #8B949E; text-decoration: line-through; }
+.aw-ins-cond {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: #484F58; padding: 3px 0;
+}
+.aw-ins-cond.done { color: #8B949E; }
+.aw-ins-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+}
+.aw-ins-close {
+    margin-top: 16px; padding: 8px 24px;
+    background: #21262D; border: 1px solid #30363D;
+    border-radius: 8px; color: #C9D1D9; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: background .15s;
+}
+.aw-ins-close:hover { background: #30363D; }
 
 /* 成就解锁通知（结算页） */
 .achieve-unlocks {
@@ -782,7 +878,7 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     animation: achieve-pop .4s ease-out;
 }
 .achieve-unlock-tier {
-    font-size: 11px; font-weight: 400; color: #8B949E;
+    font-size: 11px; font-weight: 600;
     margin-left: 4px;
 }
 @keyframes achieve-pop {
@@ -791,8 +887,131 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     100% { transform: scale(1); opacity: 1; }
 }
 
-/* 移除旧占位样式 */
-.achieve-coming-soon,
-.achieve-coming-icon,
-.achieve-coming-sub { display: none; }
+/* 成就 Toast 通知 */
+.achieve-toast-container {
+    position: fixed; top: 60px; right: 12px;
+    z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+}
+.achieve-toast {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(22, 27, 34, .95); border: 1px solid rgba(240, 192, 64, .4);
+    border-radius: 12px; padding: 10px 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.5);
+    animation: toast-in .4s ease-out forwards;
+    pointer-events: auto; min-width: 200px;
+}
+.achieve-toast.out {
+    animation: toast-out .4s ease-in forwards;
+}
+.achieve-toast-icon { font-size: 28px; flex-shrink: 0; }
+.achieve-toast-body { display: flex; flex-direction: column; }
+.achieve-toast-label { font-size: 11px; color: #8B949E; font-weight: 600; }
+.achieve-toast-name { font-size: 14px; font-weight: 700; color: #F0C040; }
+.achieve-toast-tier { font-size: 11px; font-weight: 600; margin-left: 4px; }
+@keyframes toast-in {
+    0% { transform: translateX(120%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-out {
+    0% { transform: translateX(0); opacity: 1; }
+    100% { transform: translateX(120%); opacity: 0; }
+}
 
+/* ==================== 金雷小游戏叠层 ==================== */
+.golden-overlay {
+    position: fixed; inset: 0;
+    z-index: 320;
+    background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .3s;
+}
+.golden-overlay.active {
+    opacity: 1; pointer-events: auto;
+}
+.golden-content {
+    text-align: center; position: relative;
+}
+.golden-mine {
+    font-size: 80px;
+    cursor: pointer;
+    animation: golden-breathe 1.2s ease-in-out infinite;
+    filter: drop-shadow(0 0 20px rgba(240,192,64,0.6)) drop-shadow(0 0 40px rgba(240,192,64,0.3));
+    transition: transform 0.05s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+.golden-mine.pulse {
+    animation: golden-tap 0.1s ease-out;
+}
+.golden-mine.exploding {
+    animation: golden-explode 0.5s ease-out forwards;
+}
+@keyframes golden-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+}
+@keyframes golden-tap {
+    0% { transform: scale(0.85); }
+    100% { transform: scale(1.05); }
+}
+@keyframes golden-explode {
+    0% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 20px rgba(240,192,64,0.8)); }
+    50% { transform: scale(2.5); opacity: 0.8; filter: drop-shadow(0 0 60px rgba(255,215,0,1)); }
+    100% { transform: scale(4); opacity: 0; filter: drop-shadow(0 0 80px rgba(255,215,0,0)); }
+}
+.golden-combo {
+    font-size: 48px; font-weight: 900;
+    color: #FFD700;
+    text-shadow: 0 0 20px rgba(255,215,0,0.5);
+    margin-top: 12px;
+}
+.golden-score {
+    font-size: 24px; font-weight: 700;
+    color: #F0C040;
+    margin-top: 4px;
+}
+.golden-timer {
+    font-size: 18px; font-weight: 600;
+    color: #8B949E;
+    margin-top: 8px;
+}
+.golden-hint {
+    font-size: 14px; color: #6E7681;
+    margin-top: 12px;
+    animation: golden-hint-pulse 0.8s ease-in-out infinite;
+}
+@keyframes golden-hint-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* 金雷飘分 */
+.golden-float {
+    position: absolute;
+    font-size: 18px; font-weight: 700;
+    color: #FFD700;
+    text-shadow: 0 0 8px rgba(255,215,0,0.5);
+    pointer-events: none;
+    animation: golden-float-up 0.6s ease-out forwards;
+}
+@keyframes golden-float-up {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-60px); opacity: 0; }
+}
+
+/* 金雷粒子 */
+.golden-particles {
+    position: absolute; inset: 0;
+    pointer-events: none; overflow: hidden;
+}
+.golden-particle {
+    position: absolute;
+    border-radius: 50%;
+    animation: golden-particle-fly 0.8s ease-out forwards;
+}
+@keyframes golden-particle-fly {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+}

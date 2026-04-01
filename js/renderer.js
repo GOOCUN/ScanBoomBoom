@@ -53,6 +53,10 @@ class Renderer {
         // 无伤通关特效
         this.noDmgAnim = null;
 
+        // 金雷视觉提示
+        this.goldenMinePos = null;   // {x, y} 或 null
+        this.goldenBoardGlow = false; // 棋盘边缘金色闪烁
+
         // 配色
         this.C = {
             hidden:   '#2A313A',
@@ -85,6 +89,8 @@ class Renderer {
         this.magmaFlash = null;
         this.timeWarning = false;
         this.noDmgAnim = null;
+        this.goldenMinePos = null;
+        this.goldenBoardGlow = false;
         this.dirty = true;
         this.canvas.style.transform = '';
         this.resize();
@@ -233,7 +239,7 @@ class Renderer {
             now < this.shakeEnd || this.victoryAnim || this.courageAnim ||
             this.timeoutFlash || this.jokerReverts.length > 0 || this.jokerFlash ||
             this.magmaSplashes.length > 0 || this.magmaFlash || this.timeWarning ||
-            this.noDmgAnim;
+            this.noDmgAnim || this.goldenBoardGlow;
 
         if (!this.dirty && !hasAnim) return;
         this.dirty = false;
@@ -280,7 +286,12 @@ class Renderer {
                 if (!c.revealed && !c.flagged) {
                     this._drawHidden(ctx, px, py, x, y);
                 } else if (c.flagged && !c.revealed) {
-                    this._drawFlagged(ctx, px, py);
+                    // 金雷被标旗 → 金色旗子
+                    if (this.goldenMinePos && this.goldenMinePos.x === x && this.goldenMinePos.y === y) {
+                        this._drawGoldenFlag(ctx, px, py, now);
+                    } else {
+                        this._drawFlagged(ctx, px, py);
+                    }
                 } else if (animT !== undefined && animT >= 0) {
                     // 3D 翻牌效果：前半收窄（隐藏面），后半展开（显示内容）
                     if (animT < 0.5) {
@@ -337,6 +348,21 @@ class Renderer {
                         ctx.fill();
                         ctx.restore();
                     } else if (t >= 1) this.explosion = null;
+                }
+
+                // 金雷相邻格金色呼吸提示（仅已翻开格子）
+                if (this.goldenMinePos && c.revealed && !c.mine) {
+                    const gx = this.goldenMinePos.x, gy = this.goldenMinePos.y;
+                    if (Math.abs(x - gx) <= 1 && Math.abs(y - gy) <= 1) {
+                        ctx.save();
+                        const pulse = Math.sin(now * 0.003) * 0.5 + 0.5;
+                        ctx.globalAlpha = 0.15 + pulse * 0.2;
+                        ctx.strokeStyle = '#F0C040';
+                        ctx.lineWidth = 2;
+                        this._roundRect(ctx, px + 1, py + 1, this.cellSize - 2, this.cellSize - 2, 4);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
                 }
             }
         }
@@ -447,6 +473,22 @@ class Renderer {
             ctx.restore();
         }
 
+        // 金雷棋盘边缘金色呼吸光晕
+        if (this.goldenBoardGlow) {
+            ctx.save();
+            const pulse = Math.sin(now * 0.002) * 0.5 + 0.5;
+            const alpha = 0.06 + pulse * 0.12;
+            const grad = ctx.createRadialGradient(
+                this.boardW / 2, this.boardH / 2, Math.min(this.boardW, this.boardH) * 0.4,
+                this.boardW / 2, this.boardH / 2, Math.max(this.boardW, this.boardH) * 0.75
+            );
+            grad.addColorStop(0, 'rgba(240,192,64,0)');
+            grad.addColorStop(1, `rgba(240,192,64,${alpha})`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, this.boardW, this.boardH);
+            ctx.restore();
+        }
+
         // 无伤通关金色波纹 + 盾牌
         if (this.noDmgAnim) {
             const t = (now - this.noDmgAnim.start) / this.noDmgAnim.dur;
@@ -517,6 +559,33 @@ class Renderer {
         ctx.fillText('🚩', cx, cy + 1);
     }
 
+    _drawGoldenFlag(ctx, px, py, now) {
+        const s = this.cellSize;
+        const pulse = Math.sin(now * 0.003) * 0.5 + 0.5;
+        // 金色渐变背景
+        const grad = ctx.createLinearGradient(px, py, px + s, py + s);
+        grad.addColorStop(0, '#B8860B');
+        grad.addColorStop(0.5, '#DAA520');
+        grad.addColorStop(1, '#B8860B');
+        ctx.fillStyle = grad;
+        this._roundRect(ctx, px, py, s, s, 4);
+        ctx.fill();
+        // 金色边框呼吸
+        ctx.save();
+        ctx.globalAlpha = 0.4 + pulse * 0.4;
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 2;
+        this._roundRect(ctx, px + 1, py + 1, s - 2, s - 2, 4);
+        ctx.stroke();
+        ctx.restore();
+        // 普通旗子 emoji
+        const cx = px + s / 2, cy = py + s / 2;
+        const fs = (s * 0.45) | 0;
+        ctx.font = `${fs}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🚩', cx, cy + 1);
+    }
+
     _drawRevealed(ctx, px, py, cell) {
         ctx.fillStyle = this.C.revealed;
         this._roundRect(ctx, px, py, this.cellSize, this.cellSize, 4);
@@ -531,7 +600,7 @@ class Renderer {
 
         const cx = px + this.cellSize / 2, cy = py + this.cellSize / 2;
         if (cell.mine) {
-            ctx.fillStyle = cell.magma ? '#F0883E' : cell.blue ? '#58A6FF' : this.C.mine;
+            ctx.fillStyle = cell.golden ? '#F0C040' : cell.magma ? '#F0883E' : cell.blue ? '#58A6FF' : this.C.mine;
             ctx.beginPath();
             ctx.arc(cx, cy, this.cellSize * 0.22, 0, Math.PI * 2);
             ctx.fill();

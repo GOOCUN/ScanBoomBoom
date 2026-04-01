@@ -97,6 +97,7 @@ function getSpecialMine(level) {
 // ==================== 存档 ====================
 const STORAGE_KEY = 'neuromines_records';
 const SAVE_KEY = 'scanboom_save';
+const GOLDEN_KEY = 'scanboom_golden'; // 金雷一生一次标志
 function loadRecords() {
     try {
         const d = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -135,41 +136,69 @@ function saveStats(s) {
 function loadAchievements() {
     try {
         const d = JSON.parse(localStorage.getItem(ACHIEVE_KEY));
-        return d || {};
+        if (!d || typeof d !== 'object') return {};
+        // 新格式: { id: { tier, time } } — 旧格式 { id: number } 直接清除
+        const first = Object.values(d)[0];
+        if (typeof first === 'number') {
+            localStorage.removeItem(ACHIEVE_KEY);
+            return {};
+        }
+        return d;
     } catch { return {}; }
 }
 function saveAchievements(a) {
     try { localStorage.setItem(ACHIEVE_KEY, JSON.stringify(a)); } catch {}
 }
 
-// 成就定义：每个成就有 id, icon, name, desc, tiers (铜/银/金 阈值数组), check(stats) → 当前值
+// 成就定义：每个成就有 id, icon, name, desc, tiers, check(stats), unit(展示单位), condFmt(条件格式化)
 const ACHIEVEMENTS = [
     // === 里程碑 ===
-    { id: 'firstClear', icon: '🎯', name: '初出茅庐', desc: '通过第 1 关', tiers: [1], check: s => s.totalRuns > 0 ? (s.levelClears || 0) : 0, category: '里程碑' },
-    { id: 'fullClear', icon: '🏔️', name: '登峰造极', desc: '通关第 25 关（完成一周目）', tiers: [1, 5, 10], check: s => s.totalClears || 0, category: '里程碑' },
-    { id: 'richScore', icon: '💰', name: '万分富翁', desc: '单周目总分 ≥ 阈值', tiers: [10000, 30000, 50000], check: s => s.bestRunScore || 0, category: '里程碑', tierLabels: ['≥1万', '≥3万', '≥5万'] },
+    { id: 'firstClear', icon: '🎯', name: '初出茅庐', desc: '通过第 1 关', tiers: [1], check: s => Math.min(s.levelClears || 0, 1), unit: '', category: '里程碑',
+      condFmt: () => ['通过第 1 关'] },
+    { id: 'fullClear', icon: '🏔️', name: '登峰造极', desc: '25关全通关', tiers: [1, 5, 10], check: s => s.totalClears || 0, unit: '次', category: '里程碑',
+      condFmt: () => ['全通关 1 次', '全通关 5 次', '全通关 10 次'] },
+    { id: 'richScore', icon: '💰', name: '万分富翁', desc: '单轮最高总分', tiers: [10000, 50000, 100000], check: s => s.bestRunScore || 0, unit: '分', category: '里程碑',
+      condFmt: () => ['最高分 ≥ 1万', '最高分 ≥ 5万', '最高分 ≥ 10万'] },
 
     // === 技巧类 ===
-    { id: 'ironWall', icon: '🛡️', name: '铁壁', desc: '一周目内无伤通关次数', tiers: [5, 15, 25], check: s => s.bestRunNoDmg || 0, category: '技巧' },
-    { id: 'lightning', icon: '⚡', name: '闪电手', desc: 'L8+ 关卡实际用时 ≤ 30%基础时间', tiers: [1, 5, 10], check: s => s.fastWins || 0, category: '技巧' },
-    { id: 'chainMaster', icon: '🔥', name: '连锁大师', desc: '单次翻开格数', tiers: [10, 15, 20], check: s => s.maxChain || 0, category: '技巧', tierLabels: ['≥10格', '≥15格', '≥20格'] },
-    { id: 'fateChild', icon: '🎲', name: '命运之子', desc: '累计触发勇气奖励', tiers: [10, 100, 500], check: s => s.totalCourage || 0, category: '技巧' },
+    { id: 'ironWall', icon: '🛡️', name: '铁壁', desc: '单轮连续无伤通关', tiers: [5, 15, 25], check: s => s.bestRunNoDmg || 0, unit: '关', category: '技巧',
+      condFmt: () => ['连续无伤 5 关', '连续无伤 15 关', '连续无伤 25 关'] },
+    { id: 'lightning', icon: '⚡', name: '闪电手', desc: '≥8关用时≤30%基础时间', tiers: [1, 5, 10], check: s => s.fastWins || 0, unit: '次', category: '技巧',
+      condFmt: () => ['闪电通关 1 次', '闪电通关 5 次', '闪电通关 10 次'] },
+    { id: 'chainMaster', icon: '🔥', name: '连锁大师', desc: '单次最高翻开格数', tiers: [10, 15, 20], check: s => s.maxChain || 0, unit: '格', category: '技巧',
+      condFmt: () => ['单次翻开 ≥ 10格', '单次翻开 ≥ 15格', '单次翻开 ≥ 20格'] },
+    { id: 'fateChild', icon: '🎲', name: '命运之子', desc: '累计触发勇气奖励', tiers: [10, 100, 500], check: s => s.totalCourage || 0, unit: '次', category: '技巧',
+      condFmt: () => ['触发 10 次', '触发 100 次', '触发 500 次'] },
 
     // === 挑战类 ===
-    { id: 'allInMaster', icon: '💀', name: '孤注一掷大师', desc: '用孤注一掷完成一周目', tiers: [1, 3, 5], check: s => s.allInClears || 0, category: '挑战' },
-    { id: 'blindMaster', icon: '🚫', name: '盲人摸象', desc: '用盲扫大师完成一周目', tiers: [1, 3, 5], check: s => s.noFlagClears || 0, category: '挑战' },
-    { id: 'slowIsFast', icon: '🤔', name: '慢即是快', desc: '用优柔寡断完成一周目', tiers: [1, 3, 5], check: s => s.chillFullClears || 0, category: '挑战' },
+    { id: 'allInMaster', icon: '💀', name: '孤注一掷大师', desc: '孤注一掷全通关', tiers: [1, 3, 5], check: s => s.allInClears || 0, unit: '次', category: '挑战',
+      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
+    { id: 'blindMaster', icon: '🚫', name: '盲人摸象', desc: '盲扫大师全通关', tiers: [1, 3, 5], check: s => s.noFlagClears || 0, unit: '次', category: '挑战',
+      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
+    { id: 'slowIsFast', icon: '🤔', name: '慢即是快', desc: '优柔寡断全通关', tiers: [1, 3, 5], check: s => s.chillFullClears || 0, unit: '次', category: '挑战',
+      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
 
     // === 惩罚类 ===
-    { id: 'jokerHunter', icon: '🤡', name: '小丑收割者', desc: '累计踩到小丑雷', tiers: [10, 100, 500], check: s => s.jokerHits || 0, category: '惩罚' },
-    { id: 'magmaBody', icon: '🌋', name: '岩浆体质', desc: '累计踩到岩浆雷', tiers: [10, 100, 500], check: s => s.magmaHits || 0, category: '惩罚' },
-    { id: 'clutch', icon: '💔', name: '九死一生', desc: '1命 + 剩余≤3s 通关', tiers: [1, 5, 10], check: s => s.clutchWins || 0, category: '惩罚' },
-    { id: 'neverGiveUp', icon: '💪', name: '永不言败', desc: '累计开始游戏次数（未通关25关）', tiers: [500, 1000, 2000], check: s => { const runs = s.totalRuns || 0; const clears = s.totalClears || 0; return clears === 0 ? runs : 0; }, category: '惩罚' },
+    { id: 'jokerHunter', icon: '🤡', name: '小丑收割者', desc: '累计踩到小丑雷', tiers: [10, 100, 500], check: s => s.jokerHits || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['踩到 10 次', '踩到 100 次', '踩到 500 次'] },
+    { id: 'magmaBody', icon: '🌋', name: '岩浆体质', desc: '累计踩到岩浆雷', tiers: [10, 100, 500], check: s => s.magmaHits || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['踩到 10 次', '踩到 100 次', '踩到 500 次'] },
+    { id: 'clutch', icon: '💔', name: '九死一生', desc: '1命+剩余≤3s通关', tiers: [1, 5, 10], check: s => s.clutchWins || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['触发 1 次', '触发 5 次', '触发 10 次'] },
+    { id: 'neverGiveUp', icon: '💪', name: '永不言败', desc: '未全通关前累计开局', tiers: [500, 1000, 2000], check: s => { const runs = s.totalRuns || 0; const clears = s.totalClears || 0; return clears === 0 ? runs : 0; }, unit: '局', category: '惩罚',
+      condFmt: () => ['开局 500 次', '开局 1000 次', '开局 2000 次'] },
 
     // === 累计类 ===
-    { id: 'revealPro', icon: '📦', name: '翻格达人', desc: '累计翻开格数', tiers: [5000, 20000, 50000], check: s => s.totalRevealed || 0, category: '累计' },
-    { id: 'flagPro', icon: '🚩', name: '旗手', desc: '累计标旗次数', tiers: [500, 2000, 5000], check: s => s.totalFlags || 0, category: '累计' },
-    { id: 'combo10', icon: '🏅', name: 'Combo 大师', desc: '达成 10+ 连击', tiers: [20, 100, 500], check: s => s.combo10Count || 0, category: '累计' },
+    { id: 'revealPro', icon: '📦', name: '翻格达人', desc: '累计翻开格数', tiers: [5000, 20000, 50000], check: s => s.totalRevealed || 0, unit: '格', category: '累计',
+      condFmt: () => ['翻开 5000 格', '翻开 2万格', '翻开 5万格'] },
+    { id: 'flagPro', icon: '🚩', name: '旗手', desc: '累计标旗次数', tiers: [500, 2000, 5000], check: s => s.totalFlags || 0, unit: '次', category: '累计',
+      condFmt: () => ['标旗 500 次', '标旗 2000 次', '标旗 5000 次'] },
+    { id: 'combo10', icon: '🏅', name: 'Combo 大师', desc: '累计达成10+连击', tiers: [20, 100, 500], check: s => s.combo10Count || 0, unit: '次', category: '累计',
+      condFmt: () => ['达成 20 次', '达成 100 次', '达成 500 次'] },
+
+    // === 隐藏 ===
+    { id: 'goldenMine', icon: '✨', name: '金色传说', desc: '发现并引爆金色地雷', tiers: [1], check: s => s.goldenMineFound || 0, unit: '', category: '隐藏', hidden: true,
+      condFmt: () => ['引爆金色地雷'] },
 ];
 
 // ==================== 飘分系统 ====================
@@ -214,6 +243,14 @@ class Game {
         this.runAllIn = false;    // 本周目是否始终使用孤注一掷
         this.runNoFlag = false;   // 本周目是否始终使用盲扫
         this.runChill = false;    // 本周目是否始终使用优柔寡断
+
+        // 金雷系统
+        this.goldenMineTriggered = !!localStorage.getItem(GOLDEN_KEY); // 一生一次
+        this.hasGoldenMine = false;  // 当前关卡是否有金雷
+        this.goldenMinePos = null;   // 金雷位置 {x, y}
+        this.goldenMineActive = false; // 金雷小游戏进行中
+        this.goldenMineClicks = 0;    // 金雷点击次数
+        this.goldenMineTimer = null;  // 8 秒计时器
 
         // 单关状态
         this.state = 'idle'; // idle | playing | paused | courage | ended
@@ -297,9 +334,16 @@ class Game {
             tutorialCloseBtn: document.getElementById('tutorialCloseBtn'),
             achieveOverlay:  document.getElementById('achieveOverlay'),
             achieveCloseBtn: document.getElementById('achieveCloseBtn'),
-            achieveBody:     document.querySelector('.achieve-body'),
+            achieveShareBtn: document.getElementById('achieveShareBtn'),
+            achieveBody:     document.getElementById('achieveBody'),
             shareBtn:        document.getElementById('shareBtn'),
             shareCanvas:     document.getElementById('shareCanvas'),
+            goldenOverlay:   document.getElementById('goldenOverlay'),
+            goldenMine:      document.getElementById('goldenMine'),
+            goldenCombo:     document.getElementById('goldenCombo'),
+            goldenScore:     document.getElementById('goldenScore'),
+            goldenTimer:     document.getElementById('goldenTimer'),
+            goldenParticles: document.getElementById('goldenParticles'),
         };
 
         this.audioCtx = null;
@@ -454,7 +498,6 @@ class Game {
             this._toggleAbout();
         });
         this.el.pauseHomeBtn.addEventListener('click', () => {
-            // idle 状态直接返回（不丢进度），playing 需确认
             if (this._pausedFromIdle) {
                 this.el.pauseOverlay.classList.remove('active');
                 this.state = 'ended';
@@ -466,6 +509,7 @@ class Game {
         this.el.confirmYes.addEventListener('click', () => {
             this.el.pauseConfirm.style.display = 'none';
             this.el.pauseOverlay.classList.remove('active');
+            clearSave();
             this.state = 'ended';
             this._showMenu();
         });
@@ -487,6 +531,7 @@ class Game {
         this.el.menuAchieveBtn.addEventListener('click', () => this._toggleAchieve());
         this.el.tutorialCloseBtn.addEventListener('click', () => this._toggleTutorial());
         this.el.achieveCloseBtn.addEventListener('click', () => this._toggleAchieve());
+        this.el.achieveShareBtn.addEventListener('click', () => this._shareAchieveWall());
 
         // 分享按钮
         this.el.shareBtn.addEventListener('click', () => this._shareResult());
@@ -600,6 +645,8 @@ class Game {
     _confirmModifiers() {
         this._updateModMult();
         this.el.modOverlay.classList.remove('active');
+        this.stats.totalRuns = (this.stats.totalRuns || 0) + 1;
+        saveStats(this.stats);
         this._startLevel();
     }
 
@@ -698,8 +745,6 @@ class Game {
             this.runAllIn = true;
             this.runNoFlag = true;
             this.runChill = true;
-            this.stats.totalRuns = (this.stats.totalRuns || 0) + 1;
-            saveStats(this.stats);
             this._showModifierSelection();
         }, 600);
     }
@@ -774,17 +819,43 @@ class Game {
         }
     }
 
+    _showAchieveToast(unlocks) {
+        const container = document.getElementById('achieveToast');
+        const tierNames = ['', '铜', '银', '金'];
+        const tierColors = ['', '#CD7F32', '#C0C0C0', '#FFD700'];
+        unlocks.forEach((u, i) => {
+            setTimeout(() => {
+                const el = document.createElement('div');
+                el.className = 'achieve-toast';
+                const tName = u.tier <= 0 ? '' : (u.tiers && u.tiers.length === 1 ? '金' : tierNames[u.tier]);
+                const tColor = u.tiers && u.tiers.length === 1 ? '#FFD700' : tierColors[u.tier];
+                el.innerHTML = `<div class="achieve-toast-icon">${u.icon}</div>
+                    <div class="achieve-toast-body">
+                        <span class="achieve-toast-label">成就解锁</span>
+                        <span class="achieve-toast-name">${u.name}<span class="achieve-toast-tier" style="color:${tColor}">${tName}</span></span>
+                    </div>`;
+                container.appendChild(el);
+                setTimeout(() => {
+                    el.classList.add('out');
+                    el.addEventListener('animationend', () => el.remove());
+                }, 2000);
+            }, i * 400);
+        });
+    }
+
     _checkAchievements() {
         const unlocks = [];
+        const now = Date.now();
         for (const ach of ACHIEVEMENTS) {
             const val = ach.check(this.stats);
-            const prev = this.achievements[ach.id] || 0; // 0=none, 1=铜, 2=银, 3=金
+            const data = this.achievements[ach.id] || { tier: 0, time: 0 };
+            const prev = data.tier;
             let newTier = prev;
             for (let t = 0; t < ach.tiers.length; t++) {
                 if (val >= ach.tiers[t]) newTier = t + 1;
             }
             if (newTier > prev) {
-                this.achievements[ach.id] = newTier;
+                this.achievements[ach.id] = { tier: newTier, time: now };
                 unlocks.push({ ...ach, tier: newTier });
             }
         }
@@ -794,40 +865,115 @@ class Game {
 
     _renderAchievePage() {
         const body = this.el.achieveBody;
-        const tierNames = ['', '🥉', '🥈', '🥇'];
-        const tierColors = ['', '#CD7F32', '#C0C0C0', '#FFD700'];
+        const tierColors = ['#30363D', '#CD7F32', '#C0C0C0', '#FFD700'];
         let html = '';
         let lastCat = '';
         for (const ach of ACHIEVEMENTS) {
             if (ach.category !== lastCat) {
+                if (lastCat) html += '</div>';
                 lastCat = ach.category;
-                html += `<div class="achieve-category">${lastCat}</div>`;
+                html += `<div class="aw-category">${lastCat}</div>`;
+                html += '<div class="aw-grid">';
             }
-            const tier = this.achievements[ach.id] || 0;
+            const data = this.achievements[ach.id] || { tier: 0, time: 0 };
+            const tier = data.tier;
             const val = ach.check(this.stats);
             const maxTier = ach.tiers.length;
-            const nextThreshold = tier < maxTier ? ach.tiers[tier] : ach.tiers[maxTier - 1];
-            const progress = tier >= maxTier ? 100 : Math.min(100, Math.round(val / nextThreshold * 100));
+            const color = tier > 0 ? tierColors[Math.min(tier, 3)] : '#30363D';
+            const displayColor = (maxTier === 1 && tier > 0) ? '#FFD700' : color;
 
-            html += `<div class="achieve-item ${tier > 0 ? 'unlocked' : ''}">`;
-            html += `<div class="achieve-item-icon">${ach.icon}</div>`;
-            html += `<div class="achieve-item-info">`;
-            html += `<div class="achieve-item-name">${ach.name} ${tier > 0 ? tierNames[tier] : ''}</div>`;
-            html += `<div class="achieve-item-desc">${ach.desc}</div>`;
-            // 进度条
-            html += `<div class="achieve-progress-wrap">`;
-            html += `<div class="achieve-progress-bar" style="width:${progress}%;background:${tier > 0 ? tierColors[tier] : '#30363D'}"></div>`;
+            // 隐藏成就未解锁
+            if (ach.hidden && tier === 0) {
+                html += `<div class="aw-card aw-locked" data-id="${ach.id}">`;
+                html += `<div class="aw-icon">❓</div>`;
+                html += `<div class="aw-name">???</div>`;
+                html += `</div>`;
+                continue;
+            }
+
+            const unlocked = tier > 0;
+            const valText = ach.unit ? `${val}${ach.unit}` : (unlocked ? '✓' : '—');
+            html += `<div class="aw-card ${unlocked ? 'aw-unlocked' : 'aw-locked'}" data-id="${ach.id}" style="--tier-color:${displayColor}">`;
+            html += `<div class="aw-icon">${ach.icon}</div>`;
+            html += `<div class="aw-name">${ach.name}</div>`;
+            if (unlocked) {
+                html += `<div class="aw-val" style="color:${displayColor}">${valText}</div>`;
+            } else {
+                html += `<div class="aw-val">${ach.unit ? `${val} / ${ach.tiers[tier]}` : '—'}</div>`;
+            }
             html += `</div>`;
-            // 阈值标签
-            const labels = ach.tiers.map((t, i) => {
-                const label = ach.tierLabels ? ach.tierLabels[i] : t;
-                const done = tier > i;
-                return `<span class="achieve-tier ${done ? 'done' : ''}">${tierNames[i + 1]} ${label}</span>`;
-            });
-            html += `<div class="achieve-tiers">${labels.join('')}</div>`;
-            html += `</div></div>`;
         }
+        if (lastCat) html += '</div>';
+
         body.innerHTML = html;
+
+        // 点击检视
+        body.querySelectorAll('.aw-card').forEach(card => {
+            card.addEventListener('click', () => this._showAchieveInspect(card.dataset.id));
+        });
+    }
+
+    _showAchieveInspect(id) {
+        const ach = ACHIEVEMENTS.find(a => a.id === id);
+        if (!ach) return;
+        const data = this.achievements[id] || { tier: 0, time: 0 };
+        const tier = data.tier;
+        const val = ach.check(this.stats);
+        const maxTier = ach.tiers.length;
+        const tierColors = ['#30363D', '#CD7F32', '#C0C0C0', '#FFD700'];
+        const tierNames = ['', '铜', '银', '金'];
+        const displayColor = (maxTier === 1 && tier > 0) ? '#FFD700' : (tier > 0 ? tierColors[Math.min(tier, 3)] : '#30363D');
+
+        const isHiddenLocked = ach.hidden && tier === 0;
+        const icon = isHiddenLocked ? '❓' : ach.icon;
+        const name = isHiddenLocked ? '???' : ach.name;
+        const desc = isHiddenLocked ? '隐藏成就' : ach.desc;
+        const valText = ach.unit ? `${val}${ach.unit}` : (tier > 0 ? '✓' : '—');
+
+        // 时间格式
+        let timeStr = '—';
+        if (data.time) {
+            const d = new Date(data.time);
+            timeStr = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+        }
+
+        // 条件列表（用 condFmt）
+        let condHtml = '';
+        if (!isHiddenLocked && ach.condFmt) {
+            const conds = ach.condFmt();
+            for (let t = 0; t < conds.length; t++) {
+                const tName = conds.length === 1 ? '金' : tierNames[t + 1];
+                const tColor = conds.length === 1 ? '#FFD700' : tierColors[t + 1];
+                const done = tier > t;
+                condHtml += `<div class="aw-ins-cond ${done ? 'done' : ''}">`;
+                condHtml += `<span class="aw-ins-dot" style="background:${done ? tColor : '#30363D'}"></span>`;
+                condHtml += `<span>${conds.length > 1 ? tName + '：' : ''}${conds[t]}</span>`;
+                condHtml += `</div>`;
+            }
+        }
+
+        // 进度条
+        const nextThreshold = tier < maxTier ? ach.tiers[tier] : ach.tiers[maxTier - 1];
+        const progress = tier >= maxTier ? 100 : Math.min(100, Math.round(val / nextThreshold * 100));
+        const barColor = tier >= maxTier ? displayColor : (tier > 0 ? tierColors[tier] : '#58A6FF');
+
+        const overlay = document.getElementById('achieveInspect');
+        overlay.innerHTML = `
+            <div class="aw-ins-backdrop"></div>
+            <div class="aw-ins-card" style="--tier-color:${displayColor}">
+                <div class="aw-ins-icon">${icon}</div>
+                <div class="aw-ins-name">${name}</div>
+                ${!isHiddenLocked ? `<div class="aw-ins-desc">${desc}</div>` : ''}
+                ${!isHiddenLocked ? `<div class="aw-ins-val" style="color:${displayColor}">${valText}</div>` : ''}
+                ${!isHiddenLocked ? `<div class="aw-ins-progress"><div class="aw-ins-bar" style="width:${progress}%;background:${barColor}"></div></div>` : ''}
+                ${tier > 0 ? `<div class="aw-ins-time">获取于 ${timeStr}</div>` : ''}
+                <div class="aw-ins-conds">${condHtml}</div>
+                <button class="aw-ins-close">关闭</button>
+            </div>`;
+        overlay.classList.add('active');
+
+        overlay.querySelector('.aw-ins-backdrop').addEventListener('click', () => overlay.classList.remove('active'));
+        overlay.querySelector('.aw-ins-close').addEventListener('click', () => overlay.classList.remove('active'));
     }
 
     // ==================== 关卡控制 ====================
@@ -844,6 +990,21 @@ class Game {
         this.board.magmaMineCount = special.magma;
 
         this.renderer.setBoard(this.board);
+
+        // 金雷判定（每局开局整体判定一次）
+        this.hasGoldenMine = false;
+        this.goldenMinePos = null;
+        this.goldenMineActive = false;
+        this.goldenMineClicks = 0;
+        if (this.goldenMineTimer) { clearInterval(this.goldenMineTimer); this.goldenMineTimer = null; }
+        if (!this.goldenMineTriggered) {
+            const clears = this.stats.totalClears || 0;
+            const goldenProb = 0.0001 + clears * 0.02;
+            if (Math.random() < goldenProb) {
+                this.hasGoldenMine = true;
+                this.board.goldenMineRequested = true;
+            }
+        }
 
         // 修饰器: 优柔寡断 → 时间+200%
         let timeBase = getBaseTime(this.level);
@@ -911,7 +1072,7 @@ class Game {
     // ==================== 点击处理 ====================
 
     _onClick(px, py) {
-        if (this.state === 'ended' || this.state === 'paused' || this.state === 'courage') return;
+        if (this.state === 'ended' || this.state === 'paused' || this.state === 'courage' || this.state === 'golden') return;
         const pos = this.renderer.hitTest(px, py);
         if (!pos) return;
 
@@ -965,6 +1126,9 @@ class Game {
     }
 
     _doReveal(pos) {
+        // 金雷小游戏进行中，拦截所有点击
+        if (this.goldenMineActive) return;
+
         const c = this.board.cell(pos.x, pos.y);
         if (!c) return;
 
@@ -976,12 +1140,32 @@ class Game {
 
         // ===== 勇气奖励检测（翻开前检查） =====
         const isDeadBoard = this.board.generated && !this.board.hasSafeMove();
+        const wasGenerated = this.board.generated;
 
         const result = this.board.reveal(pos.x, pos.y);
         if (!result) return;
 
+        // 首次生成后定位金雷
+        if (!wasGenerated && this.board.generated && this.hasGoldenMine) {
+            const gc = this.board.cells.find(c => c.golden);
+            if (gc) {
+                this.goldenMinePos = { x: gc.x, y: gc.y };
+                this.renderer.goldenMinePos = this.goldenMinePos;
+                this.renderer.goldenBoardGlow = true;
+                this.renderer.dirty = true;
+            } else {
+                this.hasGoldenMine = false;
+            }
+        }
+
         if (result.type === 'mine') {
-            this._onMine(result);
+            // 金雷：触发小游戏而非惩罚
+            const mineCell = this.board.cell(result.x, result.y);
+            if (mineCell && mineCell.golden) {
+                this._onGoldenMine(result);
+            } else {
+                this._onMine(result);
+            }
         } else if (isDeadBoard) {
             this._onCourageReveal(result.cells);
         } else {
@@ -996,7 +1180,12 @@ class Game {
         if (result.reveals.length > 0) this._onSafeReveal(result.reveals);
         for (const m of result.mines) {
             if (this.state !== 'playing') break; // 前一颗雷已结束游戏
-            this._onMine(m);
+            const mineCell = this.board.cell(m.x, m.y);
+            if (mineCell && mineCell.golden) {
+                this._onGoldenMine(m);
+            } else {
+                this._onMine(m);
+            }
         }
     }
 
@@ -1124,6 +1313,167 @@ class Game {
             this._uiMineCount();
             if (this.lives <= 0) this._endGame('dead');
         }
+    }
+
+    // ==================== 金雷小游戏 ====================
+
+    _onGoldenMine(result) {
+        // 翻开动画 - 金色
+        this.renderer.animateReveal([{ x: result.x, y: result.y, dist: 0 }]);
+        this.renderer.animateExplosion(result.x, result.y, '#F0C040');
+
+        // 暂停游戏计时
+        this.state = 'golden';
+        this.goldenMineActive = true;
+        this.goldenMineClicks = 0;
+
+        // 关闭棋盘金色光晕（已经找到了）
+        this.renderer.goldenBoardGlow = false;
+        this.renderer.goldenMinePos = null;
+
+        // 播放特殊发现音效
+        this._playSound('goldenFind');
+        this._haptic('courage');
+
+        // 延迟显示小游戏叠层（让翻牌动画先播）
+        setTimeout(() => {
+            this._startGoldenMiniGame();
+        }, 500);
+    }
+
+    _startGoldenMiniGame() {
+        const overlay = this.el.goldenOverlay;
+        this.el.goldenCombo.textContent = '0';
+        this.el.goldenScore.textContent = '+0';
+        this.el.goldenTimer.textContent = '8.0s';
+        this.el.goldenParticles.innerHTML = '';
+
+        overlay.classList.add('active');
+
+        // 金雷点击区域
+        const mine = this.el.goldenMine;
+        mine.classList.remove('exploding');
+
+        let remaining = 8.0;
+        this.goldenMineClicks = 0;
+
+        // 点击金雷
+        const clickHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (remaining <= 0) return;
+            this.goldenMineClicks++;
+            this.totalScore += 1000;
+            this.levelScore += 1000;
+            this.el.goldenCombo.textContent = this.goldenMineClicks;
+            this.el.goldenScore.textContent = `+${this.goldenMineClicks * 1000}`;
+            this._uiScore();
+
+            // 视觉反馈：缩放脉冲
+            mine.classList.remove('pulse');
+            void mine.offsetWidth;
+            mine.classList.add('pulse');
+
+            // 粒子
+            this._spawnGoldenParticle();
+
+            // 音效（上升音阶）
+            this._playSound('goldenTap', this.goldenMineClicks);
+            this._haptic('tick');
+
+            // 飘分
+            const rect = overlay.getBoundingClientRect();
+            const mineRect = mine.getBoundingClientRect();
+            const fx = mineRect.left - rect.left + mineRect.width / 2;
+            const fy = mineRect.top - rect.top;
+            const span = document.createElement('div');
+            span.className = 'golden-float';
+            span.textContent = '+1000';
+            span.style.left = fx + 'px';
+            span.style.top = fy + 'px';
+            overlay.appendChild(span);
+            span.addEventListener('animationend', () => span.remove());
+        };
+
+        mine.addEventListener('click', clickHandler);
+        mine.addEventListener('touchend', clickHandler);
+
+        // 8 秒倒计时
+        const interval = 50; // 50ms 精度
+        this.goldenMineTimer = setInterval(() => {
+            remaining -= interval / 1000;
+            if (remaining <= 0) remaining = 0;
+            this.el.goldenTimer.textContent = remaining.toFixed(1) + 's';
+
+            if (remaining <= 0) {
+                clearInterval(this.goldenMineTimer);
+                this.goldenMineTimer = null;
+                mine.removeEventListener('click', clickHandler);
+                mine.removeEventListener('touchend', clickHandler);
+                this._goldenExplode();
+            }
+        }, interval);
+    }
+
+    _goldenExplode() {
+        // 爆炸 +99999
+        this.totalScore += 99999;
+        this.levelScore += 99999;
+        this._uiScore();
+
+        // 统计追踪
+        this.stats.goldenMineFound = (this.stats.goldenMineFound || 0) + 1;
+        saveStats(this.stats);
+
+        this.el.goldenMine.classList.add('exploding');
+        this.el.goldenScore.textContent = `+${this.goldenMineClicks * 1000 + 99999}`;
+        this.el.goldenTimer.textContent = '💥 BOOM!';
+
+        this._playSound('goldenExplode');
+        this._haptic('win');
+
+        // 金色粒子爆发
+        for (let i = 0; i < 30; i++) {
+            setTimeout(() => this._spawnGoldenParticle(), i * 30);
+        }
+
+        // 2 秒后关闭叠层，恢复游戏
+        setTimeout(() => {
+            this.el.goldenOverlay.classList.remove('active');
+            this.goldenMineActive = false;
+
+            // 标记一生一次（等关卡结束后写入）
+            this._goldenMineDone = true;
+
+            // 恢复计时
+            this.state = 'playing';
+            this.lastTick = performance.now();
+
+            this._uiMineCount();
+            if (this.board.isComplete()) {
+                this._applyWinBonus();
+                this._endGame('win');
+            }
+        }, 2000);
+    }
+
+    _spawnGoldenParticle() {
+        const container = this.el.goldenParticles;
+        const p = document.createElement('div');
+        p.className = 'golden-particle';
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 40 + Math.random() * 120;
+        p.style.setProperty('--dx', (Math.cos(angle) * dist) + 'px');
+        p.style.setProperty('--dy', (Math.sin(angle) * dist) + 'px');
+        p.style.left = '50%';
+        p.style.top = '45%';
+        const size = 4 + Math.random() * 8;
+        p.style.width = size + 'px';
+        p.style.height = size + 'px';
+        const colors = ['#FFD700', '#F0C040', '#FFA500', '#FFEC8B', '#FFE4B5'];
+        p.style.background = colors[(Math.random() * colors.length) | 0];
+        container.appendChild(p);
+        p.addEventListener('animationend', () => p.remove());
     }
 
     // ==================== 安全翻开 ====================
@@ -1319,6 +1669,18 @@ class Game {
         this.state = 'ended';
         const isWin = reason === 'win';
 
+        // 金雷一生一次标志位（关卡结束后写入）
+        if (this._goldenMineDone) {
+            this._goldenMineDone = false;
+            this.goldenMineTriggered = true;
+            try { localStorage.setItem(GOLDEN_KEY, '1'); } catch {}
+        }
+        // 清理金雷计时器
+        if (this.goldenMineTimer) { clearInterval(this.goldenMineTimer); this.goldenMineTimer = null; }
+        this.goldenMineActive = false;
+        this.renderer.goldenBoardGlow = false;
+        this.renderer.goldenMinePos = null;
+
         // === 成就统计更新 ===
         if (isWin) {
             this.stats.levelClears = (this.stats.levelClears || 0) + 1;
@@ -1443,11 +1805,16 @@ class Game {
             // 显示新解锁成就
             const unlockDiv = document.getElementById('achieveUnlocks');
             if (newUnlocks.length > 0) {
-                const tierNames = ['', '🥉 铜', '🥈 银', '🥇 金'];
-                unlockDiv.innerHTML = newUnlocks.map(u =>
-                    `<div class="achieve-unlock-item">${u.icon} ${u.name} <span class="achieve-unlock-tier">${tierNames[u.tier]}</span></div>`
-                ).join('');
+                const tierNames = ['', '铜', '银', '金'];
+                const tierColors = ['', '#CD7F32', '#C0C0C0', '#FFD700'];
+                unlockDiv.innerHTML = newUnlocks.map(u => {
+                    const isSingle = u.tiers && u.tiers.length === 1;
+                    const tName = isSingle ? '金' : tierNames[u.tier];
+                    const tColor = isSingle ? '#FFD700' : tierColors[u.tier];
+                    return `<div class="achieve-unlock-item">${u.icon} ${u.name} <span class="achieve-unlock-tier" style="color:${tColor}">${tName}</span></div>`;
+                }).join('');
                 unlockDiv.style.display = '';
+                this._showAchieveToast(newUnlocks);
             } else {
                 unlockDiv.innerHTML = '';
                 unlockDiv.style.display = 'none';
@@ -1569,7 +1936,7 @@ class Game {
         // 底部版本
         ctx.font = '400 11px system-ui, sans-serif';
         ctx.fillStyle = '#484F58';
-        ctx.fillText('ScanBoomBoom v1.9', W / 2, 375);
+        ctx.fillText('ScanBoomBoom v2.1', W / 2, 375);
 
         // 边框
         ctx.strokeStyle = '#30363D';
@@ -1591,6 +1958,120 @@ class Game {
                 URL.revokeObjectURL(a.href);
             }
         }, 'image/png');
+    }
+
+    _shareAchieveWall() {
+        const cvs = this.el.shareCanvas;
+        const tierColors = ['#30363D', '#CD7F32', '#C0C0C0', '#FFD700'];
+        const cols = 3;
+        const pad = 30;
+        const cardW = 170, cardH = 100, gap = 12;
+        const visibleAchs = ACHIEVEMENTS.filter(a => !(a.hidden && !(this.achievements[a.id] || {}).tier));
+        const rows = Math.ceil(visibleAchs.length / cols);
+        const W = pad * 2 + cols * cardW + (cols - 1) * gap;
+        const H = 90 + rows * (cardH + gap) + 80;
+        cvs.width = W; cvs.height = H;
+        const ctx = cvs.getContext('2d');
+
+        // 背景
+        const bg = ctx.createLinearGradient(0, 0, W, H);
+        bg.addColorStop(0, '#0D1117'); bg.addColorStop(0.5, '#161B22'); bg.addColorStop(1, '#0D1117');
+        ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+        // 标题
+        ctx.font = '800 22px system-ui, sans-serif';
+        ctx.fillStyle = '#C9D1D9'; ctx.textAlign = 'center';
+        ctx.fillText('🏆 成就墙', W / 2, 40);
+
+        // 统计
+        let unlocked = 0, total = visibleAchs.length;
+        for (const a of visibleAchs) { if ((this.achievements[a.id] || {}).tier) unlocked++; }
+        ctx.font = '400 13px system-ui, sans-serif';
+        ctx.fillStyle = '#6E7681';
+        ctx.fillText(`${unlocked} / ${total} 已解锁`, W / 2, 62);
+
+        // 卡片
+        const startY = 80;
+        visibleAchs.forEach((ach, i) => {
+            const col = i % cols, row = (i / cols) | 0;
+            const x = pad + col * (cardW + gap);
+            const y = startY + row * (cardH + gap);
+            const data = this.achievements[ach.id] || { tier: 0 };
+            const tier = data.tier;
+            const maxTier = ach.tiers.length;
+            const color = tier > 0 ? ((maxTier === 1) ? '#FFD700' : tierColors[Math.min(tier, 3)]) : '#30363D';
+            const locked = tier === 0;
+
+            // 卡片背景
+            ctx.fillStyle = '#161B22';
+            ctx.beginPath();
+            this._canvasRoundRect(ctx, x, y, cardW, cardH, 8);
+            ctx.fill();
+
+            // 边框
+            ctx.strokeStyle = color;
+            ctx.lineWidth = locked ? 1 : 2;
+            ctx.globalAlpha = locked ? 0.4 : 1;
+            ctx.beginPath();
+            this._canvasRoundRect(ctx, x, y, cardW, cardH, 8);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // 图标
+            ctx.font = '28px serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.globalAlpha = locked ? 0.3 : 1;
+            ctx.fillText(ach.hidden && tier === 0 ? '❓' : ach.icon, x + cardW / 2, y + 32);
+
+            // 名称
+            ctx.font = '600 12px system-ui, sans-serif';
+            ctx.fillStyle = locked ? '#484F58' : '#C9D1D9';
+            ctx.fillText(ach.hidden && tier === 0 ? '???' : ach.name, x + cardW / 2, y + 62);
+
+            // 记录值
+            if (!ach.hidden || tier > 0) {
+                const val = ach.check(this.stats);
+                ctx.font = '700 11px system-ui, sans-serif';
+                ctx.fillStyle = locked ? '#30363D' : color;
+                ctx.fillText(String(val), x + cardW / 2, y + 82);
+            }
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#C9D1D9';
+        });
+
+        // 底部
+        ctx.font = '400 11px system-ui, sans-serif';
+        ctx.fillStyle = '#484F58'; ctx.textAlign = 'center';
+        ctx.fillText('ScanBoomBoom v2.1', W / 2, H - 20);
+
+        // 边框
+        ctx.strokeStyle = '#30363D'; ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, W - 2, H - 2);
+
+        // 导出
+        cvs.toBlob(blob => {
+            if (!blob) return;
+            const file = new File([blob], 'scanboom-achievements.png', { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({ files: [file], title: 'ScanBoomBoom 成就墙' }).catch(() => {});
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'scanboom-achievements.png';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }
+        }, 'image/png');
+    }
+
+    _canvasRoundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
     }
 
     // ==================== 存档 ====================
@@ -1941,6 +2422,61 @@ class Game {
             g.gain.setValueAtTime(0.07, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
             osc.start(t); osc.stop(t + 0.1);
+        } else if (type === 'goldenFind') {
+            // 金雷发现：魔法上行琶音 + 闪光和弦
+            const notes = [523, 659, 784, 1047, 1319, 1568, 2093];
+            notes.forEach((freq, i) => {
+                const osc = ctx.createOscillator(), g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const s = t + i * 0.06;
+                g.gain.setValueAtTime(0.12, s);
+                g.gain.exponentialRampToValueAtTime(0.001, s + 0.5);
+                osc.start(s); osc.stop(s + 0.55);
+            });
+            // 闪烁泛音
+            [1047, 1568, 2093].forEach((freq) => {
+                const osc = ctx.createOscillator(), g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.type = 'triangle';
+                osc.frequency.value = freq;
+                const s = t + 0.3;
+                g.gain.setValueAtTime(0.08, s);
+                g.gain.exponentialRampToValueAtTime(0.001, s + 0.8);
+                osc.start(s); osc.stop(s + 0.9);
+            });
+        } else if (type === 'goldenTap') {
+            // 金雷点击：逐步上升的叮音
+            const n = count || 1;
+            const freq = 600 + Math.min(n, 80) * 15;
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            g.gain.setValueAtTime(0.1, t);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+            osc.start(t); osc.stop(t + 0.1);
+        } else if (type === 'goldenExplode') {
+            // 金雷爆炸：华丽上行大和弦 + 重低音
+            [523, 659, 784, 1047, 1319, 1568, 2093, 2637].forEach((freq, i) => {
+                const osc = ctx.createOscillator(), g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                const s = t + i * 0.04;
+                g.gain.setValueAtTime(0.1, s);
+                g.gain.exponentialRampToValueAtTime(0.001, s + 0.6);
+                osc.start(s); osc.stop(s + 0.65);
+            });
+            // 宏大低音
+            const bass = ctx.createOscillator(), bg = ctx.createGain();
+            bass.connect(bg); bg.connect(ctx.destination);
+            bass.type = 'sine';
+            bass.frequency.value = 65;
+            bg.gain.setValueAtTime(0.2, t + 0.2);
+            bg.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+            bass.start(t + 0.2); bass.stop(t + 0.9);
         }
     }
 

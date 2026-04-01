@@ -34,7 +34,7 @@ class Board {
             this.cells[i] = {
                 x: i % this.width,
                 y: (i / this.width) | 0,
-                mine: false, blue: false, joker: false, magma: false, adj: 0,
+                mine: false, blue: false, joker: false, magma: false, golden: false, adj: 0,
                 revealed: false, flagged: false,
             };
         }
@@ -65,6 +65,7 @@ class Board {
                 if (this.blueMineRatio > 0) this._assignBlueMines();
                 if (this.jokerMineCount > 0) this._assignJokerMines();
                 if (this.magmaMineCount > 0) this._assignMagmaMines();
+                if (this.goldenMineRequested) this._assignGoldenMine();
                 return;
             }
             if (ratio > bestScore) {
@@ -85,6 +86,23 @@ class Board {
         if (this.blueMineRatio > 0) this._assignBlueMines();
         if (this.jokerMineCount > 0) this._assignJokerMines();
         if (this.magmaMineCount > 0) this._assignMagmaMines();
+        if (this.goldenMineRequested) this._assignGoldenMine();
+    }
+
+    _assignGoldenMine() {
+        // 从非特殊雷中随机选一颗变为金雷
+        const candidates = this.cells.filter(c => c.mine && !c.blue && !c.joker && !c.magma);
+        if (candidates.length === 0) {
+            // 退而求其次：从所有雷中选（金雷覆盖其他属性）
+            const all = this.cells.filter(c => c.mine);
+            if (all.length === 0) return;
+            const pick = all[(Math.random() * all.length) | 0];
+            pick.blue = false; pick.joker = false; pick.magma = false;
+            pick.golden = true;
+        } else {
+            const pick = candidates[(Math.random() * candidates.length) | 0];
+            pick.golden = true;
+        }
     }
 
     _assignBlueMines() {

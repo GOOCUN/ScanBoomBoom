@@ -93,13 +93,16 @@
                 <button id="pauseSettingsBtn" class="btn-secondary">⚙️ 设置</button>
                 <button id="pauseAboutBtn" class="btn-secondary">ℹ️ 关于</button>
                 <button id="pauseHomeBtn" class="btn-tertiary">🏠 回主菜单</button>
-                <!-- 确认弹窗 -->
-                <div id="pauseConfirm" class="pause-confirm" style="display:none">
-                    <div class="pause-confirm-text">本关进度将丢失，存档保留在上一关通关点。确认返回主菜单？</div>
-                    <div class="pause-confirm-btns">
-                        <button id="confirmYes" class="btn-secondary" style="color:#F85149">确认返回</button>
-                        <button id="confirmNo" class="btn-secondary">取消</button>
-                    </div>
+            </div>
+        </div>
+
+        <!-- 回主菜单确认弹窗（居中浮层） -->
+        <div id="pauseConfirm" class="pause-confirm" style="display:none">
+            <div class="pause-confirm-inner">
+                <div class="pause-confirm-text">返回主菜单将清除全部进度，下次需从第 1 关重新开始。确认放弃？</div>
+                <div class="pause-confirm-btns">
+                    <button id="confirmYes" class="btn-secondary" style="color:#F85149">确认返回</button>
+                    <button id="confirmNo" class="btn-secondary">取消</button>
                 </div>
             </div>
         </div>
@@ -112,6 +115,18 @@
                 <div class="courage-title" id="courageTitle">勇 气 奖 励 !</div>
                 <div id="courageScore" class="courage-detail"></div>
                 <div id="courageTime" class="courage-detail courage-time"></div>
+            </div>
+        </div>
+
+        <!-- 金雷小游戏叠层 -->
+        <div id="goldenOverlay" class="golden-overlay">
+            <div id="goldenParticles" class="golden-particles"></div>
+            <div class="golden-content">
+                <div id="goldenMine" class="golden-mine">💣</div>
+                <div id="goldenCombo" class="golden-combo">0</div>
+                <div id="goldenScore" class="golden-score">+0</div>
+                <div id="goldenTimer" class="golden-timer">8.0s</div>
+                <div class="golden-hint">疯狂点击！</div>
             </div>
         </div>
 
@@ -193,7 +208,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v1.9</small></span>
+                    <span class="about-title">💣 ScanBoomBoom <small style="font-size:12px;color:#6E7681">v2.1</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
@@ -264,7 +279,15 @@
                         <p>翻开 ≥ 5 格连锁额外 +2s 链式时间奖励。</p>
                     </section>
                     <section>
-                        <h3>🎭 修饰器</h3>
+                        <h3>� 回主菜单</h3>
+                        <p>游戏途中暂停后点击"回主菜单"，将清除全部进度并从第 1 关重新开始。如需保留进度请继续游戏。</p>
+                    </section>
+                    <section>
+                        <h3>🏆 成就墙</h3>
+                        <p>完成指定条件可解锁铜/银/金三档成就，点击成就卡片可查看详情与进度，📸 按钮可截图分享成就墙。</p>
+                    </section>
+                    <section>
+                        <h3>�🎭 修饰器</h3>
                         <p>每关开始前可选择修饰器，倍率可叠加相乘。每关独立，不会带到下一关。</p>
                         <ul>
                             <li>🤔 <b>优柔寡断</b>：时间 +200%，得分 ×0.5 — 适合新手熟悉玩法</li>
@@ -338,13 +361,22 @@
         <div id="achieveOverlay" class="achieve-overlay">
             <div class="achieve-content">
                 <div class="achieve-header">
-                    <span class="achieve-title">🏆 成就</span>
-                    <button id="achieveCloseBtn" class="achieve-close">✖</button>
+                    <span class="achieve-title">🏆 成就墙</span>
+                    <div class="achieve-header-btns">
+                        <button id="achieveShareBtn" class="achieve-share-btn" title="分享成就墙">📸</button>
+                        <button id="achieveCloseBtn" class="achieve-close">✖</button>
+                    </div>
                 </div>
-                <div class="achieve-body">
+                <div id="achieveBody" class="achieve-body">
                 </div>
             </div>
         </div>
+
+        <!-- 成就检视叠层 -->
+        <div id="achieveInspect" class="aw-inspect-overlay"></div>
+
+        <!-- 成就 Toast 通知 -->
+        <div id="achieveToast" class="achieve-toast-container"></div>
 
     <!-- 分享画布（隐藏） -->
     <canvas id="shareCanvas" style="display:none"></canvas>
