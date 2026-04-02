@@ -4,6 +4,9 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
+const APP_VERSION = '2.2.0';
+const APP_BUILD   = '20260402';
+
 // ==================== 关卡配置（25关） ====================
 // 雷密度 17-25%，棋盘渐进 6×6 → 8×10
 function getLevelConfig(level) {
@@ -224,6 +227,9 @@ class FloatManager {
 // ==================== 主游戏 ====================
 class Game {
     constructor() {
+        console.log(`[ScanBoomBoom] v${APP_VERSION} build ${APP_BUILD}`);
+        console.log(`[ScanBoomBoom] Capacitor: ${!!window.Capacitor}, vibrate: ${!!navigator.vibrate}`);
+
         this.canvas = document.getElementById('board');
         this.renderer = new Renderer(this.canvas);
         this.floats = new FloatManager(document.getElementById('floats'));
@@ -351,6 +357,12 @@ class Game {
 
         this.audioCtx = null;
         this._firstLaunch = true;
+
+        // 版本号显示
+        const verEl = document.getElementById('settingsVersion');
+        if (verEl) verEl.textContent = `v${APP_VERSION} (${APP_BUILD})`;
+        const aboutVer = document.getElementById('appVersion');
+        if (aboutVer) aboutVer.textContent = `v${APP_VERSION}`;
 
         this._setupInput();
         this._showMenu();
@@ -2588,7 +2600,7 @@ class Game {
         if (this.settings.vibrationLevel === 0) return;
 
         // -- Capacitor 原生实现（优先） --
-        if (window.Capacitor?.Plugins?.Haptics) {
+        try { if (window.Capacitor?.Plugins?.Haptics) {
             const H = window.Capacitor.Plugins.Haptics;
             const lvl = this.settings.vibrationLevel;
             const map = lvl === 1 ? {
@@ -2613,7 +2625,7 @@ class Game {
             const fn = map[type];
             if (fn) fn();
             return;
-        }
+        } } catch (e) { console.warn('Haptics error:', e); }
 
         // -- Web 降级实现（浏览器内使用） --
         if (navigator.vibrate) {
