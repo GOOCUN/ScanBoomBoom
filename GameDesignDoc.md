@@ -259,24 +259,24 @@
 
 ---
 
-### Sprint 6：Capacitor 打包上架（Day 8 ~ Day 10）
+### Sprint 6：Google Play 上架（Day 8 ~ Day 10）
 
-> 从 PWA 到应用商店。
+> 先上 Google Play，PWA 到 App 的自然过渡。
 
 | # | 任务 | 说明 | 预计 |
 |---|------|------|------|
 | 6.1 | Capacitor 初始化 | npm init + cap init + add android | 30min |
-| 6.2 | 原生插件接入 | @capacitor/haptics（替代 Vibration API）+ status-bar + splash-screen | 1h |
+| 6.2 | 原生插件接入 | @capacitor/haptics + status-bar + splash-screen | 1h |
 | 6.3 | Android 构建测试 | Android Studio 编译 → 真机测试完整流程 | 2h |
-| 6.4 | 启动屏 + 图标 | 各尺寸适配（Android adaptive icon + iOS app icon） | 1.5h |
-| 6.5 | 应用商店素材 | 截图 ×5 + 应用描述 + 隐私政策页 | 2h |
-| 6.6 | Android 上架 | 签名 APK → 上传华为/小米/Google Play | 2h |
-| 6.7 | iOS 上架（需 Mac） | Xcode Archive → App Store Connect → 提审 | 3h |
+| 6.4 | 启动屏 + 图标 | Android adaptive icon + splash screen 适配 | 1.5h |
+| 6.5 | 商店素材 | 截图 ×5 + Feature Graphic + 应用描述（英文） | 2h |
+| 6.6 | 隐私政策 | GitHub Pages 托管静态隐私政策页 | 30min |
+| 6.7 | Google Play 上架 | 签名 AAB → 上传 Play Console → 定价 $0.99 → 提审 | 2h |
 
 **定价策略**：
-- Android 国内商店：免费（国内买断制难推）或 ¥1
-- Google Play / App Store：$0.99（约 ¥6.99）
-- 无广告、无内购、无订阅 — 一次买断
+- Google Play：$0.99（无广告、无内购、无订阅）
+- App Store：$0.99 / ¥6（需 Mac，后续补）
+- 国内：不上架应用商店，走微信/抖音小程序（免费 + 广告）
 
 ---
 
@@ -336,20 +336,37 @@ Day 8-10 ─ Sprint 6 (上架)
 - [ ] 设置页 + 首次引导 + 分享卡片
 - [ ] Lighthouse PWA ≥ 90
 
-### 第三阶段 🔜 Capacitor 打包上架（Sprint 6）
+### 第三阶段 🔜 Google Play 上架（Sprint 6）
 - [ ] Capacitor 初始化 + 原生插件
 - [ ] Android 构建 + 真机测试
-- [ ] 应用商店素材 + 隐私政策
-- [ ] 上架 Android（华为/小米/Google Play）
-- [ ] 上架 iOS（App Store，需 Mac）
+- [ ] Google Play 商店素材 + 隐私政策
+- [ ] 上架 Google Play（$0.99 买断制）
 
-### 第四阶段 📋 第二期玩法（上架后迭代）
+### 第三阶段 B 📋 App Store 上架（需 Mac）
+- [ ] Xcode 构建 + iOS 适配测试
+- [ ] App Store 素材 + 审核
+- [ ] 上架 App Store（$0.99 / ¥6）
+
+### 第四阶段 📋 国内小程序版本
+- [ ] 微信小程序移植（Canvas + WXML + 广告 SDK）
+- [ ] 抖音小程序移植
+- [ ] 广告接入（激励视频 + 插屏）
+- [ ] 小程序上线运营
+
+### 第四阶段 📋 国内小程序版本
+- [ ] 微信小程序移植（Canvas + WXML + WXSS）
+- [ ] 广告 SDK 接入（激励视频 + 插屏）
+- [ ] 分享功能（结算卡片 + 种子挑战链接）
+- [ ] 微信小程序上线
+- [ ] 抖音小程序移植 + 上线
+
+### 第五阶段 📋 第二期玩法（上架后迭代）
 - [ ] 奖励关（每5关，纯翻格子收金币）
 - [ ] 金币系统 + 角色升级（4项）
 - [ ] 每日挑战（固定种子 + 排行榜）
 - [ ] 结算分享画面 + 种子分享链接
 
-### 第五阶段 📋 社交 + 联网（远期）
+### 第六阶段 📋 社交 + 联网（远期）
 - [ ] 好友同图比分挑战
 - [ ] 每日种子地图 + 全球排行
 - [ ] 精彩回放（最大连锁瞬间）
@@ -357,133 +374,273 @@ Day 8-10 ─ Sprint 6 (上架)
 
 ---
 
-## 七、移动端发布方案 — 从零到上架
+## 七、发行与运营方案
 
-> 适用于没做过手机 App 的开发者。当前项目是纯 HTML/CSS/JS，有三条路。
+> 核心策略：**海外买断，国内免费+广告**。两条线并行，共用同一套核心代码。
 
-### 方案对比
+---
 
-| 方案 | 说明 | 上手难度 | 到 App Store | 适合阶段 |
-|------|------|----------|-------------|----------|
-| **A. PWA** | 网页直接"添加到主屏幕" | ★☆☆ | 不上架 | 朋友测试、快速迭代 |
-| **B. Capacitor 套壳** | 网页打包成原生 App | ★★☆ | 可上架 | 正式发布 |
-| **C. 微信小程序** | 移植到小程序框架 | ★★☆ | 微信内发布 | 国内传播 |
+### 7.1 市场分析与定价逻辑
 
-### 方案 A：PWA（推荐先做，零成本验证）
+| 市场 | 用户付费习惯 | 策略 | 收入模式 |
+|------|-------------|------|----------|
+| 海外（Google Play / App Store） | 习惯为优质 App 付费 $0.99~$4.99 | 买断制，一次付费永久使用 | 付费下载 |
+| 国内 Android | 几乎不会为手游付费（¥1 都嫌贵） | 免费 + 广告变现 | 激励视频 + 插屏 |
+| 国内 iOS | 少数愿付费（苹果用户群体） | App Store 付费 or 走小程序 | 付费 / 广告 |
 
-**什么是 PWA**：把网页变成"像 App 一样"的东西。用户在浏览器里打开网页 → 点"添加到主屏幕" → 桌面出现图标 → 打开后全屏运行，看不到浏览器地址栏。
+**结论**：
+- Google Play / App Store → **$0.99 买断**（无广告、无内购、无订阅）
+- 国内 → **微信/抖音小程序**（免费 + 广告），流量够了再考虑投放
 
-**需要做的事**：
+---
 
-```
-1. 创建 manifest.json（App 名称、图标、配色、启动方式）
-2. 创建 service-worker.js（缓存静态资源，实现离线访问）
-3. 在 index.html 里引入 manifest
-4. HTTPS 部署（GitHub Pages 免费）
-```
+### 7.2 海外线：Google Play 上架（优先）
 
-**优点**：改动量极小（<1小时），不需要任何新工具，GitHub Pages 免费托管，朋友扫码即可玩。
-**缺点**：iOS 上 PWA 限制较多（无推送、存储可能被清）、不在 App Store。
+#### 7.2.1 前置准备
 
-**发布流程**：
-```
-代码推送 GitHub → 开启 GitHub Pages → 拿到 https://xxx.github.io/ScanBoomBoom/
-→ 生成二维码 → 朋友扫码 → Safari/Chrome 打开 → "添加到主屏幕"
-```
+| 项目 | 说明 | 费用 |
+|------|------|------|
+| Google Play 开发者账号 | 注册 [play.google.com/console](https://play.google.com/console)，一次性付费 | $25 |
+| 隐私政策页面 | 必须提供 URL，可用 GitHub Pages 托管一个静态页 | 免费 |
+| 应用内容分级 | 填写 IARC 问卷，扫雷属于 PEGI 3 / Everyone | 免费 |
+| 应用签名密钥 | Android App Signing，Google 托管或自持 | 免费 |
 
-### 方案 B：Capacitor 套壳打包成 App（正式发布用）
-
-**什么是 Capacitor**：Ionic 团队出的工具，把现有网页直接包进一个原生 App 壳里。你的 HTML/CSS/JS 代码**不用改**，它帮你生成 iOS/Android 项目。
-
-**工具栈**：
+#### 7.2.2 Capacitor 打包流程
 
 ```
-- Node.js 18+（你应该已经有）
-- @capacitor/core + @capacitor/cli（npm 安装）
-- Android Studio（构建 Android APK）
-- Xcode（构建 iOS IPA，需要 Mac）
-- Apple 开发者账号（$99/年，上架 App Store 需要）
-- Google Play 开发者账号（$25 一次性，上架 Play Store）
-```
-
-**具体流程**：
-
-```
-Step 1: 初始化
+Step 1: 初始化项目
   npm init -y
   npm install @capacitor/core @capacitor/cli
-  npx cap init "Neuro Mines" "com.yourname.neuromines"
-  → 生成 capacitor.config.ts
+  npx cap init "Neuro Mines" "com.goocun.neuromines"
+  # capacitor.config.ts 中 webDir 指向项目根目录
 
-Step 2: 指定网页目录
-  配置 webDir 指向你的项目根目录（有 index.html 的那个）
-
-Step 3: 添加平台
-  npm install @capacitor/android @capacitor/ios
+Step 2: 添加 Android 平台
+  npm install @capacitor/android
   npx cap add android
-  npx cap add ios
-  → 生成 android/ 和 ios/ 目录
 
-Step 4: 同步代码
+Step 3: 接入原生插件
+  npm install @capacitor/haptics        # 原生震动（替代 Vibration API）
+  npm install @capacitor/status-bar      # 状态栏控制
+  npm install @capacitor/splash-screen   # 启动屏
+
+Step 4: 同步 & 构建
   npx cap sync
-  → 把你的网页文件复制进原生项目
+  npx cap open android                  # 打开 Android Studio
+  # Build → Generate Signed Bundle (AAB)
 
-Step 5: 打开原生 IDE
-  npx cap open android  → 打开 Android Studio
-  npx cap open ios      → 打开 Xcode
-
-Step 6: 构建 & 测试
-  Android Studio: Build → Run（连手机或模拟器）
-  Xcode: Product → Run（连 iPhone 或模拟器）
-
-Step 7: 接入原生能力
-  npm install @capacitor/haptics   → 震动 API
-  npm install @capacitor/status-bar → 状态栏控制
-  npm install @capacitor/splash-screen → 启动屏
-  → 在 JS 里直接 import 调用
-
-Step 8: 上架
-  Android: Build → Generate Signed APK → 上传 Google Play Console
-  iOS: Archive → 上传 App Store Connect → 提交审核
+Step 5: 真机测试
+  Android Studio → Run on device
+  重点测试：触控手感、音效、震动、离线运行、安全区
 ```
 
-**优点**：现有代码几乎不改、原生震动/状态栏/启动屏、可上架应用商店。
-**缺点**：需要 Mac 才能出 iOS、App Store 审核周期 1-3 天。
+#### 7.2.3 商店素材清单
 
-### 方案 C：微信小程序（国内传播最佳）
+| 素材 | 规格 | 说明 |
+|------|------|------|
+| App 图标 | 512×512 PNG | 已有 |
+| Feature Graphic | 1024×500 PNG | 商店顶部横幅图 |
+| 截图 | 至少 2 张，推荐 5-8 张 | 手机竖屏截图，展示核心玩法 |
+| 短描述 | ≤ 80 字符 | "60-second nerve-wracking minesweeper — combo, courage, chaos." |
+| 完整描述 | ≤ 4000 字符 | 游戏特色、玩法、修饰器、成就系统 |
+| 视频（可选） | YouTube 链接 | 30s 游戏实录 |
 
-**差异**：小程序有自己的 API，不能直接用 DOM。但 Canvas API 基本一致。
+#### 7.2.4 Google Play 定价
 
-**需要改的**：
+| 项目 | 设定 |
+|------|------|
+| 价格 | $0.99（约 ¥6.99） |
+| 内购 | 无 |
+| 订阅 | 无 |
+| 广告 | 无 |
+| 目标地区 | 全球（重点：美国、欧洲、日本、韩国、东南亚） |
+| 内容分级 | Everyone / PEGI 3 |
 
-| 模块 | 改动量 |
-|------|--------|
-| Canvas 渲染（renderer.js） | 小改（wx.createCanvas） |
-| 触摸事件 | 小改（touchstart/end 换成小程序 API） |
-| HTML 结构 | 重写为 WXML |
-| CSS | 重写为 WXSS（基本兼容） |
-| localStorage | 换成 wx.setStorageSync |
-| Audio | 换成 wx.createInnerAudioContext |
-| 分享 | 原生 wx.shareAppMessage（巨大优势）|
+#### 7.2.5 ASO（应用商店优化）
 
-**工具栈**：
+| 要素 | 策略 |
+|------|------|
+| 标题 | Neuro Mines — 60s Nerve Minesweeper |
+| 关键词覆盖 | minesweeper, puzzle, casual, quick, combo, one-hand |
+| 截图 | 第一张展示核心玩法（棋盘 + Combo），第二张展示勇气时刻特效 |
+| 描述前两行 | 抓住「60秒一局」「单手操作」「不是传统扫雷」三个卖点 |
+| 多语言 | 英文为主，后续补日/韩/繁中 |
+
+---
+
+### 7.3 海外线 B：App Store 上架
+
+| 项目 | 说明 |
+|------|------|
+| Apple 开发者账号 | $99/年 |
+| 构建工具 | Xcode（需 Mac） |
+| 定价 | $0.99（或分区定价 ¥6） |
+| 审核周期 | 1-3 个工作日 |
+| 注意事项 | iOS PWA 限制多，上架 App Store 体验更好 |
+
+**流程**：`npx cap add ios` → `npx cap open ios` → Xcode Archive → App Store Connect
+
+> 如果暂时没有 Mac，可以先只做 Google Play，iOS 后续补。
+
+---
+
+### 7.4 国内线：微信小程序（主力）
+
+#### 7.4.1 为什么选小程序
+
+| 优势 | 说明 |
+|------|------|
+| 零安装 | 微信内直接打开，用完即走 |
+| 社交传播 | 原生 `wx.shareAppMessage`，转发裂变系数最高 |
+| 免费注册 | 个人开发者免费，不需要公司资质 |
+| 审核快 | 通常 1 个工作日 |
+| 广告 SDK | 微信官方流量主，接入简单 |
+
+#### 7.4.2 移植改动量
+
+| 模块 | 改动 | 工作量 |
+|------|------|--------|
+| Canvas 渲染 | `wx.createCanvas()` 替代 DOM Canvas | 小 |
+| 触摸事件 | 基本兼容（touchstart/touchend） | 小 |
+| HTML → WXML | 重写 UI 层（菜单、设置、弹窗） | 中 |
+| CSS → WXSS | 基本兼容，微调 rpx 单位 | 小 |
+| localStorage | → `wx.setStorageSync` / `wx.getStorageSync` | 小 |
+| Web Audio | → `wx.createInnerAudioContext`（需预生成音频文件） | 中 |
+| 震动 | → `wx.vibrateShort` / `wx.vibrateLong` | 小 |
+| 分享 | → 原生 `wx.shareAppMessage`（巨大优势） | 小 |
+
+**预估工期**：3-5 天完成移植 + 测试
+
+#### 7.4.3 广告变现策略
+
+> 原则：**广告不能破坏游戏节奏**。玩家在高紧张度的 60 秒内绝对不插广告。
+
+| 广告类型 | 触发时机 | 频率 | 预估 eCPM |
+|----------|----------|------|-----------|
+| **激励视频**（主力收入） | Game Over 后"看广告复活"（+1 命 + 恢复 15s） | 每局最多 1 次 | ¥30-80 |
+| **激励视频** | 通关后"看广告双倍积分" | 每关可选 | ¥30-80 |
+| **插屏广告** | 每 3 关结算后 | 非连续显示 | ¥10-30 |
+| **Banner** | ❌ 不用 | — | — |
+
+**广告设计原则**：
+1. 激励视频 **必须是用户主动点击**，永远不强制
+2. "看广告复活" 是核心变现点 — 玩家刚好在最紧张的时刻死掉，复活意愿最强
+3. 插屏广告**只在自然中断点**出现（关卡结算画面），且不连续出现
+4. 不用 Banner — 它会挤压游戏画面，收益还低
+
+**收入预估**（保守/乐观）：
+
+| 指标 | 保守 | 乐观 |
+|------|------|------|
+| DAU | 1,000 | 10,000 |
+| 激励视频观看率 | 30% | 50% |
+| 日均激励视频展示 | 300 次 | 5,000 次 |
+| 激励视频 eCPM | ¥40 | ¥60 |
+| 日收入 | ¥12 | ¥300 |
+| 月收入 | ¥360 | ¥9,000 |
+
+> 关键变量是 DAU。小程序冷启动靠社交裂变 → 分享功能必须做好（结算卡片 + 挑战链接）。
+
+#### 7.4.4 微信小程序获客策略
+
+| 阶段 | 策略 | 目标 |
+|------|------|------|
+| 冷启动 | 朋友圈分享 + 微信群推广 + 好友邀请 | DAU 100-500 |
+| 自然增长 | 结算分享卡片 + 种子挑战链接 + 排行榜 | DAU 500-2000 |
+| 付费投放（流量够了再做） | 微信广告投放（CPA 买量） | DAU 5000+ |
+
+**分享裂变设计**：
+- 通关后生成精美结算卡片（Canvas 绘制），含二维码 → 朋友扫码直接进小程序
+- 种子分享：分享特定关卡种子给好友 → "你能比我高分吗？"
+- 每日挑战：全服同一张图，排行榜 → 截图分享 → 社交话题
+
+---
+
+### 7.5 国内线 B：抖音小程序（流量补充）
+
+| 项目 | 说明 |
+|------|------|
+| 平台 | 字节跳动小程序（抖音/今日头条/西瓜视频） |
+| 优势 | 短视频引流天然契合（录一段 60s 游戏实况就是完美的抖音内容） |
+| 移植成本 | 从微信版改过去，API 90% 兼容，1-2 天 |
+| 广告 SDK | 穿山甲 SDK（字节跳动旗下） |
+| 获客 | 发抖音短视频 → 挂小程序链接 → "60秒你能到几分？" |
+
+---
+
+### 7.6 发行时间线
+
 ```
-- 微信开发者工具（免费下载）
-- 微信小程序账号（免费注册，个人可发布）
-- 无需 Mac，无需开发者付费账号
+Phase 1 ─── PWA 完善（当前）
+             ├── 手感打磨 + Lighthouse 满分
+             └── 朋友内测收集反馈
+
+Phase 2 ─── Google Play 上架
+             ├── Capacitor 打包 + 签名
+             ├── 商店素材制作（截图/描述/Feature Graphic）
+             ├── 隐私政策页面
+             └── 提交审核（1-3 天）
+             定价：$0.99，无广告无内购
+
+Phase 3 ─── 微信小程序
+             ├── UI 层移植（WXML/WXSS）
+             ├── 音效改用预生成文件
+             ├── 广告 SDK 接入（激励视频 + 插屏）
+             ├── 分享功能（结算卡片 + 种子挑战）
+             └── 提交审核（1 天）
+             模式：免费，靠广告变现
+
+Phase 4 ─── 扩展
+             ├── App Store 上架（需 Mac）
+             ├── 抖音小程序上线
+             ├── 多语言（英/日/韩）
+             └── 付费推广（视 ROI 决定）
 ```
 
-**优点**：微信内直接分享转发（传播系数最高）、无需安装、审核快（1天）。
-**缺点**：需要重写 UI 层、受微信平台限制。
+---
 
-### 推荐路线
+### 7.7 法律与合规
 
+| 项目 | 说明 | 状态 |
+|------|------|------|
+| 隐私政策 | 必须。说明仅使用 localStorage，不收集/上传任何个人数据 | 需创建 |
+| 用户协议 | Google Play / App Store 建议提供 | 需创建 |
+| 内容分级 | IARC 问卷（Google Play）/ 年龄分级（App Store） | 上架时填写 |
+| 软件著作权 | 国内上架小程序需要（个人开发者可免） | 可选 |
+| 小程序类目 | 「休闲游戏」类目，个人账号可发布 | 注册时选择 |
+
+#### 隐私政策要点（通用模板）
 ```
-现在 → PWA 部署（1小时搞定，朋友测试）
-     → 收集反馈、打磨手感（第二阶段 A/B）
-     → Capacitor 打包 Android APK（给更多人测）
-     → 决定是否上架 / 是否做小程序
+Neuro Mines 不收集、不存储、不上传任何个人信息。
+所有游戏数据（进度、设置、成就）仅保存在用户设备本地（localStorage）。
+本游戏不包含第三方追踪 SDK（海外版）。
+国内小程序版本包含微信/字节跳动官方广告 SDK，其隐私政策请参见对应平台文档。
 ```
+
+---
+
+### 7.8 成本与收支预估
+
+#### 固定成本
+
+| 项目 | 费用 | 频率 |
+|------|------|------|
+| Google Play 开发者 | $25 | 一次性 |
+| Apple 开发者 | $99 | 年付 |
+| 域名（可选） | ~$10 | 年付 |
+| 服务器 | $0（GitHub Pages / Vercel） | 免费 |
+| 微信小程序 | ¥0 | 免费 |
+| **总启动成本** | **~$125（约 ¥900）** | |
+
+#### 收入预估（上架后 6 个月）
+
+| 渠道 | 保守 | 乐观 |
+|------|------|------|
+| Google Play（$0.99 × 下载数） | $50-200 | $500-2000 |
+| App Store（$0.99 × 下载数） | $30-100 | $300-1000 |
+| 微信小程序广告 | ¥2,000-5,000 | ¥20,000-50,000 |
+| 抖音小程序广告 | ¥500-2,000 | ¥5,000-20,000 |
+
+> 海外买断是"品牌+口碑"，国内广告是"现金流"。两条线互补。
 
 ---
 

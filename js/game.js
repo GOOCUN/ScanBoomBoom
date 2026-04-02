@@ -2232,7 +2232,14 @@ class Game {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             this.masterGain = this.audioCtx.createGain();
             this.masterGain.gain.value = this.settings.volume / 100;
-            this.masterGain.connect(this.audioCtx.destination);
+            this.compressor = this.audioCtx.createDynamicsCompressor();
+            this.compressor.threshold.value = -24;
+            this.compressor.knee.value = 12;
+            this.compressor.ratio.value = 4;
+            this.compressor.attack.value = 0.003;
+            this.compressor.release.value = 0.15;
+            this.masterGain.connect(this.compressor);
+            this.compressor.connect(this.audioCtx.destination);
         } catch {}
     }
 
@@ -2255,7 +2262,7 @@ class Game {
                     const noteIdx = Math.min(i, scale.length - 1);
                     osc.frequency.value = scale[noteIdx] + this.combo * 4;
                     const s = t + i * 0.04;
-                    g.gain.setValueAtTime(0.07, s);
+                    g.gain.setValueAtTime(0.21, s);
                     g.gain.exponentialRampToValueAtTime(0.001, s + 0.1);
                     osc.start(s); osc.stop(s + 0.12);
                 }
@@ -2266,7 +2273,7 @@ class Game {
                     osc.type = 'sine';
                     osc.frequency.value = 600 + i * 80 + this.combo * 8;
                     const s = t + i * 0.03;
-                    g.gain.setValueAtTime(0.06, s);
+                    g.gain.setValueAtTime(0.18, s);
                     g.gain.exponentialRampToValueAtTime(0.001, s + 0.07);
                     osc.start(s); osc.stop(s + 0.09);
                 }
@@ -2277,7 +2284,7 @@ class Game {
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(200, t);
             osc.frequency.exponentialRampToValueAtTime(60, t + 0.25);
-            g.gain.setValueAtTime(0.15, t);
+            g.gain.setValueAtTime(0.45, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
             osc.start(t); osc.stop(t + 0.35);
         } else if (type === 'blueMine') {
@@ -2287,7 +2294,7 @@ class Game {
             osc.type = 'sine';
             osc.frequency.setValueAtTime(800, t);
             osc.frequency.exponentialRampToValueAtTime(200, t + 0.3);
-            g.gain.setValueAtTime(0.12, t);
+            g.gain.setValueAtTime(0.35, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
             osc.start(t); osc.stop(t + 0.4);
             // 嘀嗒音
@@ -2295,7 +2302,7 @@ class Game {
                 const o2 = ctx.createOscillator(), g2 = ctx.createGain();
                 o2.connect(g2); g2.connect(this.masterGain);
                 o2.type = 'triangle'; o2.frequency.value = 1200;
-                g2.gain.setValueAtTime(0.06, t + d);
+                g2.gain.setValueAtTime(0.18, t + d);
                 g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.05);
                 o2.start(t + d); o2.stop(t + d + 0.08);
             });
@@ -2306,7 +2313,7 @@ class Game {
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(600, t);
             osc.frequency.exponentialRampToValueAtTime(200, t + 0.4);
-            g.gain.setValueAtTime(0.12, t);
+            g.gain.setValueAtTime(0.35, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
             osc.start(t); osc.stop(t + 0.55);
             // 叠加方波颤音
@@ -2315,7 +2322,7 @@ class Game {
             osc2.type = 'square';
             osc2.frequency.setValueAtTime(300, t + 0.1);
             osc2.frequency.exponentialRampToValueAtTime(100, t + 0.45);
-            g2.gain.setValueAtTime(0.04, t + 0.1);
+            g2.gain.setValueAtTime(0.12, t + 0.1);
             g2.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
             osc2.start(t + 0.1); osc2.stop(t + 0.55);
         } else if (type === 'win') {
@@ -2325,7 +2332,7 @@ class Game {
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.12;
-                g.gain.setValueAtTime(0.08, s);
+                g.gain.setValueAtTime(0.24, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.35);
                 osc.start(s); osc.stop(s + 0.4);
             });
@@ -2338,7 +2345,7 @@ class Game {
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.07;
-                g.gain.setValueAtTime(0.12, s);
+                g.gain.setValueAtTime(0.35, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.45);
                 osc.start(s); osc.stop(s + 0.5);
             });
@@ -2349,7 +2356,7 @@ class Game {
                 osc.type = 'triangle';
                 osc.frequency.value = freq;
                 const s = t + 0.4;
-                g.gain.setValueAtTime(0.06, s);
+                g.gain.setValueAtTime(0.18, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.8);
                 osc.start(s); osc.stop(s + 0.9);
             });
@@ -2358,7 +2365,7 @@ class Game {
             bass.connect(bg); bg.connect(this.masterGain);
             bass.type = 'sine';
             bass.frequency.value = 80;
-            bg.gain.setValueAtTime(0.15, t);
+            bg.gain.setValueAtTime(0.45, t);
             bg.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
             bass.start(t); bass.stop(t + 0.35);
         } else if (type === 'rush') {
@@ -2369,7 +2376,7 @@ class Game {
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.08;
-                g.gain.setValueAtTime(0.1, s);
+                g.gain.setValueAtTime(0.3, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.15);
                 osc.start(s); osc.stop(s + 0.2);
             });
@@ -2382,7 +2389,7 @@ class Game {
                 const s = t + i * 0.15;
                 osc.frequency.setValueAtTime(180 - i * 20, s);
                 osc.frequency.exponentialRampToValueAtTime(40, s + 0.25);
-                g.gain.setValueAtTime(0.12, s);
+                g.gain.setValueAtTime(0.35, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.3);
                 osc.start(s); osc.stop(s + 0.35);
             }
@@ -2392,7 +2399,7 @@ class Game {
             bass.type = 'sine';
             bass.frequency.value = 50;
             const bs = t + 0.7;
-            bg.gain.setValueAtTime(0.2, bs);
+            bg.gain.setValueAtTime(0.5, bs);
             bg.gain.exponentialRampToValueAtTime(0.001, bs + 0.5);
             bass.start(bs); bass.stop(bs + 0.6);
         } else if (type === 'magma') {
@@ -2402,7 +2409,7 @@ class Game {
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(150, t);
             osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
-            g.gain.setValueAtTime(0.15, t);
+            g.gain.setValueAtTime(0.45, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
             osc.start(t); osc.stop(t + 0.4);
             // 气泡上升
@@ -2413,7 +2420,7 @@ class Game {
                 const s = t + 0.1 + i * 0.08;
                 o2.frequency.setValueAtTime(300 + i * 150, s);
                 o2.frequency.exponentialRampToValueAtTime(600 + i * 200, s + 0.1);
-                g2.gain.setValueAtTime(0.06, s);
+                g2.gain.setValueAtTime(0.18, s);
                 g2.gain.exponentialRampToValueAtTime(0.001, s + 0.12);
                 o2.start(s); o2.stop(s + 0.15);
             }
@@ -2424,7 +2431,7 @@ class Game {
             osc.type = 'square';
             osc.frequency.setValueAtTime(1800, t);
             osc.frequency.exponentialRampToValueAtTime(800, t + 0.04);
-            g.gain.setValueAtTime(0.1, t);
+            g.gain.setValueAtTime(0.3, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
             osc.start(t); osc.stop(t + 0.08);
             // 低频撞击
@@ -2432,7 +2439,7 @@ class Game {
             osc2.connect(g2); g2.connect(this.masterGain);
             osc2.type = 'sine';
             osc2.frequency.value = 200;
-            g2.gain.setValueAtTime(0.08, t + 0.02);
+            g2.gain.setValueAtTime(0.24, t + 0.02);
             g2.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
             osc2.start(t + 0.02); osc2.stop(t + 0.1);
         } else if (type === 'modDeselect') {
@@ -2442,7 +2449,7 @@ class Game {
             osc.type = 'sine';
             osc.frequency.setValueAtTime(1000, t);
             osc.frequency.exponentialRampToValueAtTime(400, t + 0.06);
-            g.gain.setValueAtTime(0.07, t);
+            g.gain.setValueAtTime(0.21, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
             osc.start(t); osc.stop(t + 0.1);
         } else if (type === 'goldenFind') {
@@ -2454,7 +2461,7 @@ class Game {
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.06;
-                g.gain.setValueAtTime(0.12, s);
+                g.gain.setValueAtTime(0.35, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.5);
                 osc.start(s); osc.stop(s + 0.55);
             });
@@ -2465,7 +2472,7 @@ class Game {
                 osc.type = 'triangle';
                 osc.frequency.value = freq;
                 const s = t + 0.3;
-                g.gain.setValueAtTime(0.08, s);
+                g.gain.setValueAtTime(0.24, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.8);
                 osc.start(s); osc.stop(s + 0.9);
             });
@@ -2477,7 +2484,7 @@ class Game {
             osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sine';
             osc.frequency.value = freq;
-            g.gain.setValueAtTime(0.1, t);
+            g.gain.setValueAtTime(0.3, t);
             g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
             osc.start(t); osc.stop(t + 0.1);
         } else if (type === 'goldenExplode') {
@@ -2488,7 +2495,7 @@ class Game {
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.04;
-                g.gain.setValueAtTime(0.1, s);
+                g.gain.setValueAtTime(0.3, s);
                 g.gain.exponentialRampToValueAtTime(0.001, s + 0.6);
                 osc.start(s); osc.stop(s + 0.65);
             });
@@ -2497,7 +2504,7 @@ class Game {
             bass.connect(bg); bg.connect(this.masterGain);
             bass.type = 'sine';
             bass.frequency.value = 65;
-            bg.gain.setValueAtTime(0.2, t + 0.2);
+            bg.gain.setValueAtTime(0.5, t + 0.2);
             bg.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
             bass.start(t + 0.2); bass.stop(t + 0.9);
         }
