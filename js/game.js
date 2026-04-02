@@ -4,8 +4,9 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
-const APP_VERSION = '2.2.0';
-const APP_BUILD   = '20260402';
+const APP_VERSION = '2.2.1';
+const APP_BUILD   = '20260403';
+const MASTER_GAIN_BOOST = 1.25;
 
 // ==================== 关卡配置（25关） ====================
 // 雷密度 17-25%，棋盘渐进 6×6 → 8×10
@@ -31,11 +32,12 @@ const SETTINGS_KEY = 'scanboom_settings';
 function loadSettings() {
     try {
         const d = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-        const merged = { flagMode: 'longPress', sound: true, vibration: true, volume: 80, vibrationLevel: 2, ...d };
-        if (d && d.volume === undefined && d.sound === false) merged.volume = 0;
-        if (d && d.vibrationLevel === undefined && d.vibration === false) merged.vibrationLevel = 0;
+        const merged = { flagMode: 'longPress', sound: true, vibration: true, ...d };
+        // 兼容旧滑块设置: volume=0 视为静音，vibrationLevel=0 视为关闭震动
+        if (d && d.sound === undefined && d.volume === 0) merged.sound = false;
+        if (d && d.vibration === undefined && d.vibrationLevel === 0) merged.vibration = false;
         return merged;
-    } catch { return { flagMode: 'longPress', sound: true, vibration: true, volume: 80, vibrationLevel: 2 }; }
+    } catch { return { flagMode: 'longPress', sound: true, vibration: true }; }
 }
 function saveSettings(s) {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
@@ -559,23 +561,14 @@ class Game {
                 this._applyFlagMode();
             });
         });
-        document.getElementById('volumeSlider').addEventListener('input', e => {
-            this.settings.volume = Number(e.target.value);
-            if (this.masterGain) this.masterGain.gain.value = this.settings.volume / 50;
-            const el = document.getElementById('volumeValue');
-            if (el) el.textContent = this.settings.volume === 0 ? '静音' : this.settings.volume + '%';
+        document.getElementById('soundToggle').addEventListener('change', e => {
+            this.settings.sound = e.target.checked;
             saveSettings(this.settings);
-        });
-        document.getElementById('volumeSlider').addEventListener('change', () => {
             this._playSound('pop', 3);
         });
-        document.getElementById('vibrationSlider').addEventListener('input', e => {
-            this.settings.vibrationLevel = Number(e.target.value);
-            const el = document.getElementById('vibrationValue');
-            if (el) el.textContent = ['关', '轻', '强'][this.settings.vibrationLevel];
+        document.getElementById('vibrationToggle').addEventListener('change', e => {
+            this.settings.vibration = e.target.checked;
             saveSettings(this.settings);
-        });
-        document.getElementById('vibrationSlider').addEventListener('change', () => {
             this._haptic('flag');
         });
 
@@ -2274,7 +2267,7 @@ class Game {
         try {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             this.masterGain = this.audioCtx.createGain();
-            this.masterGain.gain.value = this.settings.volume / 50;
+            this.masterGain.gain.value = MASTER_GAIN_BOOST;
             this.compressor = this.audioCtx.createDynamicsCompressor();
             this.compressor.threshold.value = -6;
             this.compressor.knee.value = 6;
@@ -2287,7 +2280,7 @@ class Game {
     }
 
     _playSound(type, count) {
-        if (this.settings.volume === 0) return;
+        if (!this.settings.sound) return;
         this._initAudio();
         const ctx = this.audioCtx;
         if (!ctx) return;
@@ -2571,18 +2564,10 @@ class Game {
     _applySettingsUI() {
         const r = document.querySelector(`input[name="flagMode"][value="${this.settings.flagMode}"]`);
         if (r) r.checked = true;
-        const vol = document.getElementById('volumeSlider');
-        if (vol) {
-            vol.value = this.settings.volume ?? 80;
-            const sv = document.getElementById('volumeValue');
-            if (sv) sv.textContent = this.settings.volume === 0 ? '静音' : (this.settings.volume ?? 80) + '%';
-        }
-        const vib = document.getElementById('vibrationSlider');
-        if (vib) {
-            vib.value = this.settings.vibrationLevel ?? 2;
-            const vv = document.getElementById('vibrationValue');
-            if (vv) vv.textContent = ['关', '轻', '强'][this.settings.vibrationLevel ?? 2];
-        }
+        const soundToggle = document.getElementById('soundToggle');
+        if (soundToggle) soundToggle.checked = this.settings.sound !== false;
+        const vibrationToggle = document.getElementById('vibrationToggle');
+        if (vibrationToggle) vibrationToggle.checked = this.settings.vibration !== false;
     }
 
     // ==================== 触觉反馈抽象层 ====================
@@ -2597,22 +2582,12 @@ class Game {
     //   selectionChanged()               → tick
 
     _haptic(type) {
-        if (this.settings.vibrationLevel === 0) return;
+        if (!this.settings.vibration) return;
 
         // -- Capacitor 原生实现（优先） --
         try { if (window.Capacitor?.Plugins?.Haptics) {
             const H = window.Capacitor.Plugins.Haptics;
-            const lvl = this.settings.vibrationLevel;
-            const map = lvl === 1 ? {
-                tick:     () => H.selectionChanged(),
-                reveal:   () => H.selectionChanged(),
-                flag:     () => H.impact({ style: 'light' }),
-                blueMine: () => H.impact({ style: 'light' }),
-                mine:     () => H.impact({ style: 'medium' }),
-                courage:  () => H.impact({ style: 'light' }),
-                win:      () => H.notification({ type: 'success' }),
-                gameOver: () => H.impact({ style: 'medium' }),
-            } : {
+            const map = {
                 tick:     () => H.selectionChanged(),
                 reveal:   () => H.impact({ style: 'light' }),
                 flag:     () => H.impact({ style: 'medium' }),
@@ -2629,20 +2604,15 @@ class Game {
 
         // -- Web 降级实现（浏览器内使用） --
         if (navigator.vibrate) {
-            const lvl = this.settings.vibrationLevel;
-            const sc = lvl === 1 ? 0.4 : 1.0;
-            const mp = v => Array.isArray(v)
-                ? v.map(x => Math.max(1, Math.round(x * sc)))
-                : Math.max(1, Math.round(v * sc));
             const patterns = {
-                tick:     mp(5),
-                reveal:   mp(8),
-                flag:     mp(15),
-                blueMine: mp(40),
-                mine:     mp(80),
-                courage:  mp([30, 20, 50]),
-                win:      mp([20, 15, 20, 15, 30]),
-                gameOver: mp([80, 40, 80]),
+                tick:     8,
+                reveal:   12,
+                flag:     22,
+                blueMine: 50,
+                mine:     110,
+                courage:  [35, 20, 55],
+                win:      [22, 15, 22, 15, 30],
+                gameOver: [90, 40, 100],
             };
             const p = patterns[type];
             if (p) navigator.vibrate(p);

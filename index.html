@@ -190,20 +190,16 @@
                     </div>
                     <div class="settings-group">
                         <div class="settings-group-title">🔊 音效与震动</div>
-                        <div class="settings-slider-row">
-                            <div class="settings-slider-header">
-                                <span>音效音量</span>
-                                <span class="settings-slider-value" id="volumeValue">100%</span>
-                            </div>
-                            <input type="range" id="volumeSlider" class="settings-range" min="0" max="200" step="5" value="80" aria-label="音效音量">
-                        </div>
-                        <div class="settings-slider-row">
-                            <div class="settings-slider-header">
-                                <span>震动强度</span>
-                                <span class="settings-slider-value" id="vibrationValue">强</span>
-                            </div>
-                            <input type="range" id="vibrationSlider" class="settings-range" min="0" max="2" step="1" value="2" aria-label="震动强度">
-                        </div>
+                        <label class="settings-toggle">
+                            <span>游戏音效</span>
+                            <input type="checkbox" id="soundToggle" aria-label="游戏音效开关">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <label class="settings-toggle">
+                            <span>震动反馈</span>
+                            <input type="checkbox" id="vibrationToggle" aria-label="震动反馈开关">
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                     <div style="text-align:center;padding:8px 0 4px;color:#484F58;font-size:11px;" id="settingsVersion"></div>
                 </div>
@@ -214,7 +210,7 @@
         <div id="aboutOverlay" class="about-overlay">
             <div class="about-content">
                 <div class="about-header">
-                    <span class="about-title">💣 ScanBoomBoom <small id="appVersion" style="font-size:12px;color:#6E7681">v2.2.0</small></span>
+                    <span class="about-title">💣 ScanBoomBoom <small id="appVersion" style="font-size:12px;color:#6E7681">v2.2.1</small></span>
                     <button id="aboutCloseBtn" class="about-close">✖</button>
                 </div>
                 <div class="about-body">
