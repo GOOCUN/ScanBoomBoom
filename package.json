@@ -1,0 +1,32 @@
+{
+  "name": "scanboomboom",
+  "version": "1.0.0",
+  "description": "",
+  "main": "service-worker.js",
+  "scripts": {
+    "copy-www": "powershell -Command \"Remove-Item www\\* -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item index.html,manifest.json,service-worker.js www\\ -Force; Copy-Item css,js,icons www\\ -Recurse -Force\"",
+    "sync": "npm run copy-www && npx cap sync android",
+    "open": "npx cap open android",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GOOCUN/ScanBoomBoom.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GOOCUN/ScanBoomBoom/issues"
+  },
+  "homepage": "https://github.com/GOOCUN/ScanBoomBoom#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2"
+  }
+}

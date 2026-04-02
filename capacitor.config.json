@@ -1,0 +1,17 @@
+{
+  "appId": "com.goocun.neuromines",
+  "appName": "Neuro Mines",
+  "webDir": "www",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 1500,
+      "backgroundColor": "#0D1117",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0D1117"
+    }
+  }
+}
