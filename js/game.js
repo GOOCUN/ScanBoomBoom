@@ -2233,9 +2233,9 @@ class Game {
             this.masterGain = this.audioCtx.createGain();
             this.masterGain.gain.value = this.settings.volume / 100;
             this.compressor = this.audioCtx.createDynamicsCompressor();
-            this.compressor.threshold.value = -24;
-            this.compressor.knee.value = 12;
-            this.compressor.ratio.value = 4;
+            this.compressor.threshold.value = -6;
+            this.compressor.knee.value = 6;
+            this.compressor.ratio.value = 12;
             this.compressor.attack.value = 0.003;
             this.compressor.release.value = 0.15;
             this.masterGain.connect(this.compressor);
