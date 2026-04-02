@@ -549,7 +549,7 @@ class Game {
         });
         document.getElementById('volumeSlider').addEventListener('input', e => {
             this.settings.volume = Number(e.target.value);
-            if (this.masterGain) this.masterGain.gain.value = this.settings.volume / 100;
+            if (this.masterGain) this.masterGain.gain.value = this.settings.volume / 50;
             const el = document.getElementById('volumeValue');
             if (el) el.textContent = this.settings.volume === 0 ? '静音' : this.settings.volume + '%';
             saveSettings(this.settings);
@@ -1962,8 +1962,24 @@ class Game {
         ctx.strokeRect(1, 1, W - 2, H - 2);
 
         // 导出
-        cvs.toBlob(blob => {
+        cvs.toBlob(async blob => {
             if (!blob) return;
+            // Capacitor 原生分享
+            if (window.Capacitor?.Plugins?.Filesystem && window.Capacitor?.Plugins?.Share) {
+                try {
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        const FS = window.Capacitor.Plugins.Filesystem;
+                        const SH = window.Capacitor.Plugins.Share;
+                        const fname = 'scanboom-result.png';
+                        const res = await FS.writeFile({ path: fname, data: base64Data, directory: 'CACHE' });
+                        await SH.share({ title: 'ScanBoomBoom', text: '来挑战 ScanBoomBoom！', files: [res.uri] });
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                } catch {}
+            }
             const file = new File([blob], 'scanboom-result.png', { type: 'image/png' });
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 navigator.share({ files: [file], title: 'ScanBoomBoom', text: '来挑战 ScanBoomBoom！' }).catch(() => {});
@@ -2067,8 +2083,23 @@ class Game {
         ctx.strokeRect(1, 1, W - 2, H - 2);
 
         // 导出
-        cvs.toBlob(blob => {
+        cvs.toBlob(async blob => {
             if (!blob) return;
+            if (window.Capacitor?.Plugins?.Filesystem && window.Capacitor?.Plugins?.Share) {
+                try {
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Data = reader.result.split(',')[1];
+                        const FS = window.Capacitor.Plugins.Filesystem;
+                        const SH = window.Capacitor.Plugins.Share;
+                        const fname = 'scanboom-achievements.png';
+                        const res = await FS.writeFile({ path: fname, data: base64Data, directory: 'CACHE' });
+                        await SH.share({ title: 'ScanBoomBoom 成就墙', files: [res.uri] });
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                } catch {}
+            }
             const file = new File([blob], 'scanboom-achievements.png', { type: 'image/png' });
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 navigator.share({ files: [file], title: 'ScanBoomBoom 成就墙' }).catch(() => {});
@@ -2231,7 +2262,7 @@ class Game {
         try {
             this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             this.masterGain = this.audioCtx.createGain();
-            this.masterGain.gain.value = this.settings.volume / 100;
+            this.masterGain.gain.value = this.settings.volume / 50;
             this.compressor = this.audioCtx.createDynamicsCompressor();
             this.compressor.threshold.value = -6;
             this.compressor.knee.value = 6;
@@ -2248,6 +2279,7 @@ class Game {
         this._initAudio();
         const ctx = this.audioCtx;
         if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume();
         const t = ctx.currentTime;
 
         if (type === 'pop') {
@@ -2555,9 +2587,37 @@ class Game {
     _haptic(type) {
         if (this.settings.vibrationLevel === 0) return;
 
-        // -- Web 降级实现（仅 Android 生效） --
+        // -- Capacitor 原生实现（优先） --
+        if (window.Capacitor?.Plugins?.Haptics) {
+            const H = window.Capacitor.Plugins.Haptics;
+            const lvl = this.settings.vibrationLevel;
+            const map = lvl === 1 ? {
+                tick:     () => H.selectionChanged(),
+                reveal:   () => H.selectionChanged(),
+                flag:     () => H.impact({ style: 'light' }),
+                blueMine: () => H.impact({ style: 'light' }),
+                mine:     () => H.impact({ style: 'medium' }),
+                courage:  () => H.impact({ style: 'light' }),
+                win:      () => H.notification({ type: 'success' }),
+                gameOver: () => H.impact({ style: 'medium' }),
+            } : {
+                tick:     () => H.selectionChanged(),
+                reveal:   () => H.impact({ style: 'light' }),
+                flag:     () => H.impact({ style: 'medium' }),
+                blueMine: () => H.impact({ style: 'medium' }),
+                mine:     () => H.impact({ style: 'heavy' }),
+                courage:  () => H.notification({ type: 'warning' }),
+                win:      () => H.notification({ type: 'success' }),
+                gameOver: () => H.notification({ type: 'error' }),
+            };
+            const fn = map[type];
+            if (fn) fn();
+            return;
+        }
+
+        // -- Web 降级实现（浏览器内使用） --
         if (navigator.vibrate) {
-            const lvl = this.settings.vibrationLevel; // 1 = 轻, 2 = 强
+            const lvl = this.settings.vibrationLevel;
             const sc = lvl === 1 ? 0.4 : 1.0;
             const mp = v => Array.isArray(v)
                 ? v.map(x => Math.max(1, Math.round(x * sc)))
@@ -2575,24 +2635,6 @@ class Game {
             const p = patterns[type];
             if (p) navigator.vibrate(p);
         }
-
-        // -- Capacitor 实现（打包 App 时启用） --
-        // if (window.Capacitor?.Plugins?.Haptics) {
-        //     const H = window.Capacitor.Plugins.Haptics;
-        //     const map = {
-        //         tick:     () => H.selectionChanged(),
-        //         reveal:   () => H.impact({ style: 'light' }),
-        //         flag:     () => H.impact({ style: 'medium' }),
-        //         blueMine: () => H.impact({ style: 'medium' }),
-        //         mine:     () => H.impact({ style: 'heavy' }),
-        //         courage:  () => H.notification({ type: 'warning' }),
-        //         win:      () => H.notification({ type: 'success' }),
-        //         gameOver: () => H.notification({ type: 'error' }),
-        //     };
-        //     const fn = map[type];
-        //     if (fn) fn();
-        //     return;
-        // }
     }
 
     // ==================== 主循环 ====================

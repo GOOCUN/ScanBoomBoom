@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Neuro Mines</string>
-    <string name="title_activity_main">Neuro Mines</string>
+    <string name="app_name">神经扫雷</string>
+    <string name="title_activity_main">神经扫雷</string>
     <string name="package_name">com.goocun.neuromines</string>
     <string name="custom_url_scheme">com.goocun.neuromines</string>
 </resources>
