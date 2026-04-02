@@ -451,6 +451,37 @@ html, body { height: 100%; background: #0D1117; color: #C9D1D9; font-family: sys
     transform: translateX(20px);
 }
 
+/* Settings range sliders */
+.settings-slider-row {
+    padding: 10px 0 12px;
+    border-bottom: 1px solid #21262D;
+}
+.settings-slider-row:last-child { border-bottom: none; }
+.settings-slider-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; font-size: 14px; color: #C9D1D9;
+}
+.settings-slider-value {
+    font-size: 13px; color: #58A6FF; font-weight: 700;
+    min-width: 36px; text-align: right;
+}
+.settings-range {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; border-radius: 2px;
+    background: #30363D; outline: none; cursor: pointer;
+}
+.settings-range::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #58A6FF; cursor: pointer;
+    box-shadow: 0 0 8px rgba(88,166,255,.45);
+}
+.settings-range::-moz-range-thumb {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #58A6FF; cursor: pointer; border: none;
+    box-shadow: 0 0 8px rgba(88,166,255,.45);
+}
+
 /* ============================================
    主菜单
    ============================================ */

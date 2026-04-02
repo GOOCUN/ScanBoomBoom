@@ -190,16 +190,20 @@
                     </div>
                     <div class="settings-group">
                         <div class="settings-group-title">🔊 音效与震动</div>
-                        <label class="settings-toggle">
-                            <span>游戏音效</span>
-                            <input type="checkbox" id="soundToggle">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <label class="settings-toggle">
-                            <span>震动反馈</span>
-                            <input type="checkbox" id="vibrationToggle">
-                            <span class="toggle-slider"></span>
-                        </label>
+                        <div class="settings-slider-row">
+                            <div class="settings-slider-header">
+                                <span>音效音量</span>
+                                <span class="settings-slider-value" id="volumeValue">100%</span>
+                            </div>
+                            <input type="range" id="volumeSlider" class="settings-range" min="0" max="200" step="5" value="80">
+                        </div>
+                        <div class="settings-slider-row">
+                            <div class="settings-slider-header">
+                                <span>震动强度</span>
+                                <span class="settings-slider-value" id="vibrationValue">强</span>
+                            </div>
+                            <input type="range" id="vibrationSlider" class="settings-range" min="0" max="2" step="1" value="2">
+                        </div>
                     </div>
                 </div>
             </div>

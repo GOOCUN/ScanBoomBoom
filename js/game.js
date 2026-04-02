@@ -28,8 +28,11 @@ const SETTINGS_KEY = 'scanboom_settings';
 function loadSettings() {
     try {
         const d = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-        return { flagMode: 'longPress', sound: true, vibration: true, ...d };
-    } catch { return { flagMode: 'longPress', sound: true, vibration: true }; }
+        const merged = { flagMode: 'longPress', sound: true, vibration: true, volume: 80, vibrationLevel: 2, ...d };
+        if (d && d.volume === undefined && d.sound === false) merged.volume = 0;
+        if (d && d.vibrationLevel === undefined && d.vibration === false) merged.vibrationLevel = 0;
+        return merged;
+    } catch { return { flagMode: 'longPress', sound: true, vibration: true, volume: 80, vibrationLevel: 2 }; }
 }
 function saveSettings(s) {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
@@ -544,13 +547,24 @@ class Game {
                 this._applyFlagMode();
             });
         });
-        document.getElementById('soundToggle').addEventListener('change', e => {
-            this.settings.sound = e.target.checked;
+        document.getElementById('volumeSlider').addEventListener('input', e => {
+            this.settings.volume = Number(e.target.value);
+            if (this.masterGain) this.masterGain.gain.value = this.settings.volume / 100;
+            const el = document.getElementById('volumeValue');
+            if (el) el.textContent = this.settings.volume === 0 ? '静音' : this.settings.volume + '%';
             saveSettings(this.settings);
         });
-        document.getElementById('vibrationToggle').addEventListener('change', e => {
-            this.settings.vibration = e.target.checked;
+        document.getElementById('volumeSlider').addEventListener('change', () => {
+            this._playSound('pop', 3);
+        });
+        document.getElementById('vibrationSlider').addEventListener('input', e => {
+            this.settings.vibrationLevel = Number(e.target.value);
+            const el = document.getElementById('vibrationValue');
+            if (el) el.textContent = ['关', '轻', '强'][this.settings.vibrationLevel];
             saveSettings(this.settings);
+        });
+        document.getElementById('vibrationSlider').addEventListener('change', () => {
+            this._haptic('flag');
         });
 
         // 结算按钮
@@ -2214,11 +2228,16 @@ class Game {
 
     _initAudio() {
         if (this.audioCtx) return;
-        try { this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+        try {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.audioCtx.createGain();
+            this.masterGain.gain.value = this.settings.volume / 100;
+            this.masterGain.connect(this.audioCtx.destination);
+        } catch {}
     }
 
     _playSound(type, count) {
-        if (!this.settings.sound) return;
+        if (this.settings.volume === 0) return;
         this._initAudio();
         const ctx = this.audioCtx;
         if (!ctx) return;
@@ -2231,7 +2250,7 @@ class Game {
                 const scale = [523, 587, 659, 698, 784, 880, 988, 1047];
                 for (let i = 0; i < n; i++) {
                     const osc = ctx.createOscillator(), g = ctx.createGain();
-                    osc.connect(g); g.connect(ctx.destination);
+                    osc.connect(g); g.connect(this.masterGain);
                     osc.type = 'sine';
                     const noteIdx = Math.min(i, scale.length - 1);
                     osc.frequency.value = scale[noteIdx] + this.combo * 4;
@@ -2243,7 +2262,7 @@ class Game {
             } else {
                 for (let i = 0; i < n; i++) {
                     const osc = ctx.createOscillator(), g = ctx.createGain();
-                    osc.connect(g); g.connect(ctx.destination);
+                    osc.connect(g); g.connect(this.masterGain);
                     osc.type = 'sine';
                     osc.frequency.value = 600 + i * 80 + this.combo * 8;
                     const s = t + i * 0.03;
@@ -2254,7 +2273,7 @@ class Game {
             }
         } else if (type === 'boom') {
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(200, t);
             osc.frequency.exponentialRampToValueAtTime(60, t + 0.25);
@@ -2264,7 +2283,7 @@ class Game {
         } else if (type === 'blueMine') {
             // 蓝雷：下降水滴音 + 时钟倒转感
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sine';
             osc.frequency.setValueAtTime(800, t);
             osc.frequency.exponentialRampToValueAtTime(200, t + 0.3);
@@ -2274,7 +2293,7 @@ class Game {
             // 嘀嗒音
             [0.1, 0.2].forEach(d => {
                 const o2 = ctx.createOscillator(), g2 = ctx.createGain();
-                o2.connect(g2); g2.connect(ctx.destination);
+                o2.connect(g2); g2.connect(this.masterGain);
                 o2.type = 'triangle'; o2.frequency.value = 1200;
                 g2.gain.setValueAtTime(0.06, t + d);
                 g2.gain.exponentialRampToValueAtTime(0.001, t + d + 0.05);
@@ -2283,7 +2302,7 @@ class Game {
         } else if (type === 'joker') {
             // 小丑雷：调皮的下降“哇哇”音
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(600, t);
             osc.frequency.exponentialRampToValueAtTime(200, t + 0.4);
@@ -2292,7 +2311,7 @@ class Game {
             osc.start(t); osc.stop(t + 0.55);
             // 叠加方波颤音
             const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
-            osc2.connect(g2); g2.connect(ctx.destination);
+            osc2.connect(g2); g2.connect(this.masterGain);
             osc2.type = 'square';
             osc2.frequency.setValueAtTime(300, t + 0.1);
             osc2.frequency.exponentialRampToValueAtTime(100, t + 0.45);
@@ -2302,7 +2321,7 @@ class Game {
         } else if (type === 'win') {
             [523, 659, 784, 1047].forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.12;
@@ -2315,7 +2334,7 @@ class Game {
             const notes = [523, 659, 784, 1047, 1319, 1568];
             notes.forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.07;
@@ -2326,7 +2345,7 @@ class Game {
             // 闪光和弦叠加
             [1047, 1319, 1568].forEach((freq) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'triangle';
                 osc.frequency.value = freq;
                 const s = t + 0.4;
@@ -2336,7 +2355,7 @@ class Game {
             });
             // 低频 punch
             const bass = ctx.createOscillator(), bg = ctx.createGain();
-            bass.connect(bg); bg.connect(ctx.destination);
+            bass.connect(bg); bg.connect(this.masterGain);
             bass.type = 'sine';
             bass.frequency.value = 80;
             bg.gain.setValueAtTime(0.15, t);
@@ -2346,7 +2365,7 @@ class Game {
             // 短促上行双音 "叮叮"
             [880, 1320].forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.08;
@@ -2358,7 +2377,7 @@ class Game {
             // 下沉连续爆炸音：多个低频 sawtooth 依次触发
             for (let i = 0; i < 5; i++) {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sawtooth';
                 const s = t + i * 0.15;
                 osc.frequency.setValueAtTime(180 - i * 20, s);
@@ -2369,7 +2388,7 @@ class Game {
             }
             // 最后一声重低音
             const bass = ctx.createOscillator(), bg = ctx.createGain();
-            bass.connect(bg); bg.connect(ctx.destination);
+            bass.connect(bg); bg.connect(this.masterGain);
             bass.type = 'sine';
             bass.frequency.value = 50;
             const bs = t + 0.7;
@@ -2379,7 +2398,7 @@ class Game {
         } else if (type === 'magma') {
             // 岩浆雷：低频轰鸣 + 气泡上升音
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(150, t);
             osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
@@ -2389,7 +2408,7 @@ class Game {
             // 气泡上升
             for (let i = 0; i < 3; i++) {
                 const o2 = ctx.createOscillator(), g2 = ctx.createGain();
-                o2.connect(g2); g2.connect(ctx.destination);
+                o2.connect(g2); g2.connect(this.masterGain);
                 o2.type = 'sine';
                 const s = t + 0.1 + i * 0.08;
                 o2.frequency.setValueAtTime(300 + i * 150, s);
@@ -2401,7 +2420,7 @@ class Game {
         } else if (type === 'modSelect') {
             // 金属锁扣 "咔"：短促高频 + 低频撞击
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'square';
             osc.frequency.setValueAtTime(1800, t);
             osc.frequency.exponentialRampToValueAtTime(800, t + 0.04);
@@ -2410,7 +2429,7 @@ class Game {
             osc.start(t); osc.stop(t + 0.08);
             // 低频撞击
             const osc2 = ctx.createOscillator(), g2 = ctx.createGain();
-            osc2.connect(g2); g2.connect(ctx.destination);
+            osc2.connect(g2); g2.connect(this.masterGain);
             osc2.type = 'sine';
             osc2.frequency.value = 200;
             g2.gain.setValueAtTime(0.08, t + 0.02);
@@ -2419,7 +2438,7 @@ class Game {
         } else if (type === 'modDeselect') {
             // 轻弹回 "嘀"：短促下降音
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sine';
             osc.frequency.setValueAtTime(1000, t);
             osc.frequency.exponentialRampToValueAtTime(400, t + 0.06);
@@ -2431,7 +2450,7 @@ class Game {
             const notes = [523, 659, 784, 1047, 1319, 1568, 2093];
             notes.forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.06;
@@ -2442,7 +2461,7 @@ class Game {
             // 闪烁泛音
             [1047, 1568, 2093].forEach((freq) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'triangle';
                 osc.frequency.value = freq;
                 const s = t + 0.3;
@@ -2455,7 +2474,7 @@ class Game {
             const n = count || 1;
             const freq = 600 + Math.min(n, 80) * 15;
             const osc = ctx.createOscillator(), g = ctx.createGain();
-            osc.connect(g); g.connect(ctx.destination);
+            osc.connect(g); g.connect(this.masterGain);
             osc.type = 'sine';
             osc.frequency.value = freq;
             g.gain.setValueAtTime(0.1, t);
@@ -2465,7 +2484,7 @@ class Game {
             // 金雷爆炸：华丽上行大和弦 + 重低音
             [523, 659, 784, 1047, 1319, 1568, 2093, 2637].forEach((freq, i) => {
                 const osc = ctx.createOscillator(), g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
+                osc.connect(g); g.connect(this.masterGain);
                 osc.type = 'sine';
                 osc.frequency.value = freq;
                 const s = t + i * 0.04;
@@ -2475,7 +2494,7 @@ class Game {
             });
             // 宏大低音
             const bass = ctx.createOscillator(), bg = ctx.createGain();
-            bass.connect(bg); bg.connect(ctx.destination);
+            bass.connect(bg); bg.connect(this.masterGain);
             bass.type = 'sine';
             bass.frequency.value = 65;
             bg.gain.setValueAtTime(0.2, t + 0.2);
@@ -2501,10 +2520,18 @@ class Game {
     _applySettingsUI() {
         const r = document.querySelector(`input[name="flagMode"][value="${this.settings.flagMode}"]`);
         if (r) r.checked = true;
-        const s = document.getElementById('soundToggle');
-        if (s) s.checked = this.settings.sound;
-        const v = document.getElementById('vibrationToggle');
-        if (v) v.checked = this.settings.vibration;
+        const vol = document.getElementById('volumeSlider');
+        if (vol) {
+            vol.value = this.settings.volume ?? 80;
+            const sv = document.getElementById('volumeValue');
+            if (sv) sv.textContent = this.settings.volume === 0 ? '静音' : (this.settings.volume ?? 80) + '%';
+        }
+        const vib = document.getElementById('vibrationSlider');
+        if (vib) {
+            vib.value = this.settings.vibrationLevel ?? 2;
+            const vv = document.getElementById('vibrationValue');
+            if (vv) vv.textContent = ['关', '轻', '强'][this.settings.vibrationLevel ?? 2];
+        }
     }
 
     // ==================== 触觉反馈抽象层 ====================
@@ -2519,19 +2546,24 @@ class Game {
     //   selectionChanged()               → tick
 
     _haptic(type) {
-        if (!this.settings.vibration) return;
+        if (this.settings.vibrationLevel === 0) return;
 
         // -- Web 降级实现（仅 Android 生效） --
         if (navigator.vibrate) {
+            const lvl = this.settings.vibrationLevel; // 1 = 轻, 2 = 强
+            const sc = lvl === 1 ? 0.4 : 1.0;
+            const mp = v => Array.isArray(v)
+                ? v.map(x => Math.max(1, Math.round(x * sc)))
+                : Math.max(1, Math.round(v * sc));
             const patterns = {
-                tick:     5,
-                reveal:   8,
-                flag:     15,
-                blueMine: 40,
-                mine:     80,
-                courage:  [30, 20, 50],
-                win:      [20, 15, 20, 15, 30],
-                gameOver: [80, 40, 80],
+                tick:     mp(5),
+                reveal:   mp(8),
+                flag:     mp(15),
+                blueMine: mp(40),
+                mine:     mp(80),
+                courage:  mp([30, 20, 50]),
+                win:      mp([20, 15, 20, 15, 30]),
+                gameOver: mp([80, 40, 80]),
             };
             const p = patterns[type];
             if (p) navigator.vibrate(p);
