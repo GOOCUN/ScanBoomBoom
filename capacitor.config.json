@@ -4,14 +4,14 @@
   "webDir": "www",
   "plugins": {
     "SplashScreen": {
+      "layoutName": "launch_screen",
       "launchAutoHide": true,
-      "launchShowDuration": 1500,
-      "backgroundColor": "#0D1117",
-      "showSpinner": false
+      "launchShowDuration": 1500
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#0D1117"
+      "backgroundColor": "#00000000",
+      "overlaysWebView": true
     }
   }
 }

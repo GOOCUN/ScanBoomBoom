@@ -1,10 +1,10 @@
 {
   "name": "scanboomboom",
-  "version": "2.2.1",
+  "version": "2.3.2",
   "description": "",
   "main": "service-worker.js",
   "scripts": {
-    "copy-www": "powershell -Command \"Remove-Item www\\* -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item index.html,manifest.json,service-worker.js www\\ -Force; Copy-Item css,js,icons www\\ -Recurse -Force\"",
+    "copy-www": "powershell -Command \"Remove-Item www\\* -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item index.html,manifest.json,service-worker.js www\\ -Force; Copy-Item css,js,icons www\\ -Recurse -Force; if (Test-Path audio) { Copy-Item audio www\\ -Recurse -Force }\"",
     "sync": "npm run copy-www && npx cap sync android",
     "open": "npx cap open android",
     "test": "echo \"Error: no test specified\" && exit 1"

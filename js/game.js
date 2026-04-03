@@ -4,7 +4,7 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
-const APP_VERSION = '2.2.1';
+const APP_VERSION = '2.3.2';
 const APP_BUILD   = '20260403';
 const MASTER_GAIN_BOOST = 1.25;
 
@@ -359,6 +359,7 @@ class Game {
 
         this.audioCtx = null;
         this._firstLaunch = true;
+        this._bgmNode = null;
 
         // 版本号显示
         const verEl = document.getElementById('settingsVersion');
@@ -367,6 +368,13 @@ class Game {
         if (aboutVer) aboutVer.textContent = `v${APP_VERSION}`;
 
         this._setupInput();
+
+        // 强制状态栏白色图标（深色背景）
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+            window.Capacitor.Plugins.StatusBar.setStyle({ style: 'DARK' });
+            window.Capacitor.Plugins.StatusBar.setOverlaysWebView({ overlay: true });
+        }
+
         this._showMenu();
         this._loop();
     }
@@ -675,6 +683,8 @@ class Game {
         this.el.gameScreen.style.display = 'none';
         this.el.menuScreen.style.display = '';
         this.el.menuScreen.classList.remove('exploding');
+        // 菜单背景音乐
+        this._startBGM();
         // 显示历史记录
         if (this.records.bestLevel > 0) {
             this.el.menuRecord.textContent = `最高: 第${this.records.bestLevel}关 · ${this.records.bestScore}分`;
@@ -709,6 +719,7 @@ class Game {
 
     _menuContinue() {
         this._initAudio();
+        this._stopBGM();
         const save = loadSave();
         if (!save) return;
 
@@ -727,7 +738,7 @@ class Game {
         this.el.menuContinueBtn.disabled = true;
         this._spawnMenuFragments();
         this.el.menuScreen.classList.add('exploding');
-        this._haptic('mine');
+        this._haptic('flag');
         this._playSound('boom');
 
         setTimeout(() => {
@@ -740,12 +751,13 @@ class Game {
 
     _menuStart() {
         this._initAudio();
+        this._stopBGM();
         this.el.menuStartBtn.disabled = true;
 
         // 立即爆炸
         this._spawnMenuFragments();
         this.el.menuScreen.classList.add('exploding');
-        this._haptic('mine');
+        this._haptic('flag');
         this._playSound('boom');
 
         setTimeout(() => {
@@ -1521,7 +1533,7 @@ class Game {
 
         this.renderer.animateReveal(cells);
         this._playSound('pop', n);
-        this._haptic(n >= 3 ? 'reveal' : 'tick');
+        if (n < 3) this._haptic('tick');
 
         // 飘分
         const mid = cells[Math.floor(cells.length / 2)];
@@ -2279,6 +2291,44 @@ class Game {
         } catch {}
     }
 
+    // ==================== 背景音乐 ====================
+    _startBGM() {
+        if (!this.settings.sound) return;
+        if (this._bgmNode) return;
+        this._initAudio();
+        const ctx = this.audioCtx;
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume();
+        // 尝试加载 audio/menu-bgm.mp3
+        const audio = new Audio('audio/menu-bgm.mp3');
+        audio.loop = true;
+        audio.volume = 0.35;
+        audio.play().then(() => {
+            const src = ctx.createMediaElementSource(audio);
+            const gain = ctx.createGain();
+            gain.gain.value = 0.35;
+            src.connect(gain);
+            gain.connect(ctx.destination);
+            this._bgmNode = { audio, gain };
+        }).catch(() => {});
+    }
+
+    _stopBGM(fade = true) {
+        if (!this._bgmNode) return;
+        const { audio, gain } = this._bgmNode;
+        if (fade && gain) {
+            const ctx = this.audioCtx;
+            if (ctx) {
+                gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+            }
+            setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 550);
+        } else {
+            audio.pause(); audio.currentTime = 0;
+        }
+        this._bgmNode = null;
+    }
+
     _playSound(type, count) {
         if (!this.settings.sound) return;
         this._initAudio();
@@ -2589,13 +2639,12 @@ class Game {
             const H = window.Capacitor.Plugins.Haptics;
             const map = {
                 tick:     () => H.selectionChanged(),
-                reveal:   () => H.impact({ style: 'light' }),
-                flag:     () => H.impact({ style: 'medium' }),
-                blueMine: () => H.impact({ style: 'medium' }),
-                mine:     () => H.impact({ style: 'heavy' }),
+                flag:     () => H.impact({ style: 'light' }),
+                blueMine: () => H.impact({ style: 'light' }),
+                mine:     () => H.impact({ style: 'medium' }),
                 courage:  () => H.notification({ type: 'warning' }),
                 win:      () => H.notification({ type: 'success' }),
-                gameOver: () => H.notification({ type: 'error' }),
+                gameOver: () => H.notification({ type: 'warning' }),
             };
             const fn = map[type];
             if (fn) fn();
@@ -2606,13 +2655,12 @@ class Game {
         if (navigator.vibrate) {
             const patterns = {
                 tick:     8,
-                reveal:   12,
-                flag:     22,
-                blueMine: 50,
-                mine:     110,
+                flag:     10,
+                blueMine: 30,
+                mine:     60,
                 courage:  [35, 20, 55],
                 win:      [22, 15, 22, 15, 30],
-                gameOver: [90, 40, 100],
+                gameOver: [50, 30, 60],
             };
             const p = patterns[type];
             if (p) navigator.vibrate(p);
