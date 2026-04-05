@@ -8,7 +8,7 @@
 //
 // 更新方式：修改 CACHE_VERSION 的数字，用户下次打开会自动更新
 
-const CACHE_VERSION = 'scanboom-v2.3.2';
+const CACHE_VERSION = 'scanboom-v2.5.0';
 
 const ASSETS_TO_CACHE = [
     './',
@@ -20,6 +20,7 @@ const ASSETS_TO_CACHE = [
     './manifest.json',
     './icons/icon2-192.png',
     './icons/icon2-512.png',
+    './audio/menu-bgm.mp3',
 ];
 
 // ========== 安装：缓存所有资源 ==========

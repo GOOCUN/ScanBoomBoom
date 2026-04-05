@@ -4,18 +4,18 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
-const APP_VERSION = '2.3.2';
-const APP_BUILD   = '20260403';
+const APP_VERSION = '2.5.0';
+const APP_BUILD   = '20260404';
 const MASTER_GAIN_BOOST = 1.25;
 
-// ==================== 关卡配置（25关） ====================
-// 雷密度 17-25%，棋盘渐进 6×6 → 8×10
+// ==================== 关卡配置（21关） ====================
+// 雷密度 17-22%，棋盘渐进 6×6 → 8×10
 function getLevelConfig(level) {
-    level = Math.min(level, 25);
+    level = Math.min(level, 21);
     if (level <= 3)  return { w: 6, h: 6,  mines: 5 + level            };  // 6,7,8   → 17-22%
-    if (level <= 7)  return { w: 6, h: 8,  mines: 5 + level            };  // 9,10,11,12 → 19-25%
-    if (level <= 12) return { w: 7, h: 9,  mines: 3 + level            };  // 11,12,13,14,15 → 17-24%
-    return             { w: 8, h: 10, mines: Math.min(level + 1, 20)   };  // 14→20 → 18-25%
+    if (level <= 7)  return { w: 6, h: 8,  mines: 4 + level            };  // 8,9,10,10 → 17-21%
+    if (level <= 12) return { w: 7, h: 9,  mines: 2 + level            };  // 10,11,12,13,14 → 16-22%
+    return             { w: 8, h: 10, mines: Math.min(level + 1, 17)   };  // 14→17 → 18-21%
 }
 
 // 基础时间（按棋盘大小）
@@ -32,12 +32,12 @@ const SETTINGS_KEY = 'scanboom_settings';
 function loadSettings() {
     try {
         const d = JSON.parse(localStorage.getItem(SETTINGS_KEY));
-        const merged = { flagMode: 'longPress', sound: true, vibration: true, ...d };
+        const merged = { flagMode: 'longPress', sound: true, vibration: true, music: true, ...d };
         // 兼容旧滑块设置: volume=0 视为静音，vibrationLevel=0 视为关闭震动
         if (d && d.sound === undefined && d.volume === 0) merged.sound = false;
         if (d && d.vibration === undefined && d.vibrationLevel === 0) merged.vibration = false;
         return merged;
-    } catch { return { flagMode: 'longPress', sound: true, vibration: true }; }
+    } catch { return { flagMode: 'longPress', sound: true, vibration: true, music: true }; }
 }
 function saveSettings(s) {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
@@ -53,8 +53,7 @@ function getChainTimeBonus(chainLen) {
 function getRushTiers(level) {
     if (level <= 7)  return [ { steps: 4, window: 10, bonus: 4, label: '速推!' }, { steps: 6, window: 8, bonus: 6, label: '极速!!' } ];
     if (level <= 14) return [ { steps: 4, window: 8,  bonus: 3, label: '速推!' }, { steps: 6, window: 7, bonus: 5, label: '极速!!' } ];
-    if (level <= 22) return [ { steps: 4, window: 7,  bonus: 3, label: '速推!' }, { steps: 6, window: 5, bonus: 5, label: '极速!!' } ];
-    return                  [ { steps: 4, window: 6,  bonus: 2, label: '速推!' }, { steps: 6, window: 4, bonus: 4, label: '极速!!' } ];
+    return                  [ { steps: 4, window: 7,  bonus: 3, label: '速推!' }, { steps: 6, window: 5, bonus: 5, label: '极速!!' } ];
 }
 
 // ==================== 修饰器定义 ====================
@@ -69,13 +68,14 @@ const MODIFIERS = {
 function getBlueMineRatio(level) {
     if (level < 6) return 0;
     if (level <= 10) return 0.3;
+    if (level <= 16) return 0.5;
     return 0.5;
 }
 
 // 蓝雷扣时比例（按关卡递增）
 function getBlueTimePenalty(level) {
     if (level <= 10) return 1 / 4;
-    if (level <= 17) return 1 / 3;
+    if (level <= 16) return 1 / 3;
     return 1 / 2;
 }
 
@@ -88,18 +88,23 @@ function getSpecialMine(level) {
             ? { joker: 1, magma: 0 }
             : { joker: 0, magma: 1 };
     }
-    if (level <= 14) {
-        // L10-14：各1个
+    if (level <= 13) {
+        // L10-13：各1个
         return { joker: 1, magma: 1 };
     }
-    if (level <= 19) {
-        // L15-19：总数2，随机分配
+    if (level <= 16) {
+        // L14-16：总数2，随机分配
         const j = Math.floor(Math.random() * 3); // 0,1,2
         return { joker: j, magma: 2 - j };
     }
-    // L20+：总数3，随机分配
-    const j = Math.floor(Math.random() * 4); // 0,1,2,3
-    return { joker: j, magma: 3 - j };
+    if (level <= 18) {
+        // L17-18：总数3，随机分配
+        const j = Math.floor(Math.random() * 4); // 0,1,2,3
+        return { joker: j, magma: 3 - j };
+    }
+    // L19-21：总数4，随机分配
+    const j = Math.floor(Math.random() * 5); // 0,1,2,3,4
+    return { joker: j, magma: 4 - j };
 }
 
 // ==================== 存档 ====================
@@ -163,46 +168,49 @@ const ACHIEVEMENTS = [
     // === 里程碑 ===
     { id: 'firstClear', icon: '🎯', name: '初出茅庐', desc: '通过第 1 关', tiers: [1], check: s => Math.min(s.levelClears || 0, 1), unit: '', category: '里程碑',
       condFmt: () => ['通过第 1 关'] },
-    { id: 'fullClear', icon: '🏔️', name: '登峰造极', desc: '25关全通关', tiers: [1, 5, 10], check: s => s.totalClears || 0, unit: '次', category: '里程碑',
-      condFmt: () => ['全通关 1 次', '全通关 5 次', '全通关 10 次'] },
-    { id: 'richScore', icon: '💰', name: '万分富翁', desc: '单轮最高总分', tiers: [10000, 50000, 100000], check: s => s.bestRunScore || 0, unit: '分', category: '里程碑',
-      condFmt: () => ['最高分 ≥ 1万', '最高分 ≥ 5万', '最高分 ≥ 10万'] },
+    { id: 'fullClear', icon: '🏔️', name: '登峰造极', desc: '21关全通关', tiers: [1, 3, 5], check: s => s.totalClears || 0, unit: '次', category: '里程碑',
+      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
+    { id: 'richScore', icon: '💰', name: '万分富翁', desc: '历史最高总分', tiers: [10000, 30000, 100000], check: s => s.bestRunScore || 0, unit: '分', category: '里程碑',
+      condFmt: () => ['最高分 ≥ 1万', '最高分 ≥ 3万', '最高分 ≥ 10万'] },
 
     // === 技巧类 ===
-    { id: 'ironWall', icon: '🛡️', name: '铁壁', desc: '单轮连续无伤通关', tiers: [5, 15, 25], check: s => s.bestRunNoDmg || 0, unit: '关', category: '技巧',
-      condFmt: () => ['连续无伤 5 关', '连续无伤 15 关', '连续无伤 25 关'] },
-    { id: 'lightning', icon: '⚡', name: '闪电手', desc: '≥8关用时≤30%基础时间', tiers: [1, 5, 10], check: s => s.fastWins || 0, unit: '次', category: '技巧',
-      condFmt: () => ['闪电通关 1 次', '闪电通关 5 次', '闪电通关 10 次'] },
+    { id: 'ironWall', icon: '🛡️', name: '铁壁', desc: '单轮连续无伤通关', tiers: [5, 15, 21], check: s => s.bestRunNoDmg || 0, unit: '关', category: '技巧',
+      condFmt: () => ['连续无伤 5 关', '连续无伤 15 关', '连续无伤 21 关'] },
+    { id: 'lightning', icon: '⚡', name: '闪电手', desc: '争分夺秒模式累计通关', tiers: [5, 15, 24], check: s => s.rushWins || 0, unit: '关', category: '技巧',
+      condFmt: () => ['累计通关 5 关', '累计通关 15 关', '累计通关 24 关'] },
     { id: 'chainMaster', icon: '🔥', name: '连锁大师', desc: '单次最高翻开格数', tiers: [10, 15, 20], check: s => s.maxChain || 0, unit: '格', category: '技巧',
       condFmt: () => ['单次翻开 ≥ 10格', '单次翻开 ≥ 15格', '单次翻开 ≥ 20格'] },
-    { id: 'fateChild', icon: '🎲', name: '命运之子', desc: '累计触发勇气奖励', tiers: [10, 100, 500], check: s => s.totalCourage || 0, unit: '次', category: '技巧',
-      condFmt: () => ['触发 10 次', '触发 100 次', '触发 500 次'] },
+    { id: 'fateChild', icon: '🎲', name: '命运之子', desc: '累计触发勇气奖励', tiers: [1, 10, 20], check: s => s.totalCourage || 0, unit: '次', category: '技巧',
+      condFmt: () => ['触发 1 次', '触发 10 次', '触发 20 次'] },
 
     // === 挑战类 ===
-    { id: 'allInMaster', icon: '💀', name: '孤注一掷大师', desc: '孤注一掷全通关', tiers: [1, 3, 5], check: s => s.allInClears || 0, unit: '次', category: '挑战',
-      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
-    { id: 'blindMaster', icon: '🚫', name: '盲人摸象', desc: '盲扫大师全通关', tiers: [1, 3, 5], check: s => s.noFlagClears || 0, unit: '次', category: '挑战',
-      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
-    { id: 'slowIsFast', icon: '🤔', name: '慢即是快', desc: '优柔寡断全通关', tiers: [1, 3, 5], check: s => s.chillFullClears || 0, unit: '次', category: '挑战',
-      condFmt: () => ['全通关 1 次', '全通关 3 次', '全通关 5 次'] },
+    { id: 'allInMaster', icon: '💀', name: '孤注一掷大师', desc: '使用孤注一掷修饰器', tiers: [1, 13, 21],
+      check: s => s.allInBestRun || 0, unit: '关', category: '挑战',
+      condFmt: () => ['通关 1 关', '不死亡到第13关', '全通21关'] },
+    { id: 'blindMaster', icon: '🚫', name: '盲人摸象', desc: '使用盲扫大师修饰器', tiers: [1, 13, 21],
+      check: s => s.noFlagBestRun || 0, unit: '关', category: '挑战',
+      condFmt: () => ['通关 1 关', '不死亡到第13关', '全通21关'] },
+    { id: 'slowIsFast', icon: '🤔', name: '慢即是快', desc: '使用优柔寡断修饰器', tiers: [1, 13, 21],
+      check: s => s.chillBestRun || 0, unit: '关', category: '挑战',
+      condFmt: () => ['通关 1 关', '不死亡到第13关', '全通21关'] },
 
     // === 惩罚类 ===
-    { id: 'jokerHunter', icon: '🤡', name: '小丑收割者', desc: '累计踩到小丑雷', tiers: [10, 100, 500], check: s => s.jokerHits || 0, unit: '次', category: '惩罚',
-      condFmt: () => ['踩到 10 次', '踩到 100 次', '踩到 500 次'] },
-    { id: 'magmaBody', icon: '🌋', name: '岩浆体质', desc: '累计踩到岩浆雷', tiers: [10, 100, 500], check: s => s.magmaHits || 0, unit: '次', category: '惩罚',
-      condFmt: () => ['踩到 10 次', '踩到 100 次', '踩到 500 次'] },
+    { id: 'jokerHunter', icon: '🤡', name: '小丑收割者', desc: '累计踩到小丑雷', tiers: [1, 10, 20], check: s => s.jokerHits || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['踩到 1 次', '踩到 10 次', '踩到 20 次'] },
+    { id: 'magmaBody', icon: '🌋', name: '岩浆体质', desc: '累计踩到岩浆雷', tiers: [1, 10, 20], check: s => s.magmaHits || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['踩到 1 次', '踩到 10 次', '踩到 20 次'] },
     { id: 'clutch', icon: '💔', name: '九死一生', desc: '1命+剩余≤3s通关', tiers: [1, 5, 10], check: s => s.clutchWins || 0, unit: '次', category: '惩罚',
       condFmt: () => ['触发 1 次', '触发 5 次', '触发 10 次'] },
-    { id: 'neverGiveUp', icon: '💪', name: '永不言败', desc: '未全通关前累计开局', tiers: [500, 1000, 2000], check: s => { const runs = s.totalRuns || 0; const clears = s.totalClears || 0; return clears === 0 ? runs : 0; }, unit: '局', category: '惩罚',
-      condFmt: () => ['开局 500 次', '开局 1000 次', '开局 2000 次'] },
+    { id: 'neverGiveUp', icon: '💪', name: '永不言败', desc: '累计死亡次数', tiers: [50, 100, 200], check: s => s.totalDeaths || 0, unit: '次', category: '惩罚',
+      condFmt: () => ['死亡 50 次', '死亡 100 次', '死亡 200 次'] },
 
     // === 累计类 ===
-    { id: 'revealPro', icon: '📦', name: '翻格达人', desc: '累计翻开格数', tiers: [5000, 20000, 50000], check: s => s.totalRevealed || 0, unit: '格', category: '累计',
-      condFmt: () => ['翻开 5000 格', '翻开 2万格', '翻开 5万格'] },
-    { id: 'flagPro', icon: '🚩', name: '旗手', desc: '累计标旗次数', tiers: [500, 2000, 5000], check: s => s.totalFlags || 0, unit: '次', category: '累计',
-      condFmt: () => ['标旗 500 次', '标旗 2000 次', '标旗 5000 次'] },
-    { id: 'combo10', icon: '🏅', name: 'Combo 大师', desc: '累计达成10+连击', tiers: [20, 100, 500], check: s => s.combo10Count || 0, unit: '次', category: '累计',
-      condFmt: () => ['达成 20 次', '达成 100 次', '达成 500 次'] },
+    { id: 'revealPro', icon: '📦', name: '翻格达人', desc: '累计翻开格数', tiers: [500, 1000, 2000], check: s => s.totalRevealed || 0, unit: '格', category: '累计',
+      condFmt: () => ['翻开 500 格', '翻开 1000 格', '翻开 2000 格'] },
+    { id: 'flagPro', icon: '🚩', name: '旗手', desc: '累计标旗次数', tiers: [200, 500, 1000], check: s => s.totalFlags || 0, unit: '次', category: '累计',
+      condFmt: () => ['标旗 200 次', '标旗 500 次', '标旗 1000 次'] },
+    { id: 'combo10', icon: '🏅', name: 'Combo 大师', desc: '累计达成10+连击', tiers: [10, 50, 200], check: s => s.combo10Count || 0, unit: '次', category: '累计',
+      condFmt: () => ['达成 10 次', '达成 50 次', '达成 200 次'] },
 
     // === 隐藏 ===
     { id: 'goldenMine', icon: '✨', name: '金色传说', desc: '发现并引爆金色地雷', tiers: [1], check: s => s.goldenMineFound || 0, unit: '', category: '隐藏', hidden: true,
@@ -251,6 +259,7 @@ class Game {
 
         // 周目内追踪（不跨存档）
         this.runNoDmgCount = 0;   // 本周目无伤通关次数
+        this.runNoDeath = true;   // 本周目是否未死亡（Game Over）
         this.runAllIn = false;    // 本周目是否始终使用孤注一掷
         this.runNoFlag = false;   // 本周目是否始终使用盲扫
         this.runChill = false;    // 本周目是否始终使用优柔寡断
@@ -574,6 +583,15 @@ class Game {
             saveSettings(this.settings);
             this._playSound('pop', 3);
         });
+        document.getElementById('musicToggle').addEventListener('change', e => {
+            this.settings.music = e.target.checked;
+            saveSettings(this.settings);
+            if (e.target.checked) {
+                this._startBGM();
+            } else {
+                this._stopBGM();
+            }
+        });
         document.getElementById('vibrationToggle').addEventListener('change', e => {
             this.settings.vibration = e.target.checked;
             saveSettings(this.settings);
@@ -715,6 +733,173 @@ class Game {
             localStorage.setItem('scanboom_tutorialSeen', '1');
             setTimeout(() => this.el.tutorialOverlay.classList.add('active'), 400);
         }
+
+        // 更新 Logo 演化状态
+        this._updateLogoState();
+
+        // 金雷触发后的全屏爆炸彩蛋（一次性）
+        if (this.goldenMineTriggered && !localStorage.getItem('scanboom_explosionSeen')) {
+            setTimeout(() => this._triggerMenuExplosion(), 600);
+        }
+    }
+
+    // ==================== Logo 演化系统 ====================
+    // 金色描边 ← 金色成就解锁比例 (0~12 字符)
+    // 金色填色+跳动 ← totalClears 周目数 (每周目随机填1个)
+    // 终极形态 ← goldenMineTriggered (全金+安静)
+
+    _updateLogoState() {
+        const chars = document.querySelectorAll('#menuTitle .logo-char');
+        if (!chars.length) return;
+
+        // 1. 计算金色成就比例 → 描边数
+        let goldCount = 0;
+        let goldTotal = 0;
+        for (const ach of ACHIEVEMENTS) {
+            goldTotal++;
+            const data = this.achievements[ach.id] || { tier: 0 };
+            if (data.tier >= ach.tiers.length) goldCount++;
+        }
+        const strokeChars = Math.min(12, Math.round((goldCount / goldTotal) * 12));
+
+        // 2. 计算填色字符数 ← totalClears
+        const clears = this.stats.totalClears || 0;
+        const fillCount = Math.min(12, clears);
+
+        // 3. 确定填色顺序（用种子随机但固定）
+        const fillOrder = this._getLogoFillOrder();
+
+        // 4. 是否已触发金雷 → 终极形态
+        const isFinal = this.goldenMineTriggered;
+
+        // 5. 应用状态
+        for (let i = 0; i < 12; i++) {
+            const ch = chars[i];
+            ch.classList.remove('gold-stroke', 'gold-fill', 'gold-final', 'gold-groove');
+            if (isFinal) {
+                ch.classList.add('gold-final');
+                // 爆炸已播放过 → 直接律动；未播放 → 等爆炸归位后再加
+                if (localStorage.getItem('scanboom_explosionSeen')) {
+                    ch.classList.add('gold-groove');
+                }
+            } else {
+                // 填色优先级高于描边
+                const fillIdx = fillOrder.indexOf(i);
+                if (fillIdx !== -1 && fillIdx < fillCount) {
+                    ch.classList.add('gold-fill');
+                } else if (i < strokeChars) {
+                    ch.classList.add('gold-stroke');
+                }
+            }
+        }
+    }
+
+    _getLogoFillOrder() {
+        // 固定的伪随机顺序(基于简单shuffle)，确保每次一致
+        // 但每个玩家按周目顺序点亮不同字符
+        let key = 'scanboom_logoOrder';
+        let order;
+        try { order = JSON.parse(localStorage.getItem(key)); } catch {}
+        if (!order || order.length !== 12) {
+            order = [0,1,2,3,4,5,6,7,8,9,10,11];
+            // Fisher-Yates shuffle with seeded random
+            for (let i = 11; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [order[i], order[j]] = [order[j], order[i]];
+            }
+            try { localStorage.setItem(key, JSON.stringify(order)); } catch {}
+        }
+        return order;
+    }
+
+    // ==================== 全屏爆炸彩蛋 ====================
+    _triggerMenuExplosion() {
+        const menuContent = document.querySelector('.menu-content');
+        if (!menuContent) return;
+
+        // 收集所有要炸开的元素
+        const chars = document.querySelectorAll('#menuTitle .logo-char');
+        const otherEls = [
+            document.getElementById('menuBomb'),
+            document.querySelector('.menu-subtitle'),
+            document.getElementById('menuRecord'),
+            document.getElementById('menuStartBtn'),
+            document.getElementById('menuContinueBtn'),
+            document.getElementById('menuSettingsBtn'),
+            document.getElementById('menuTutorialBtn'),
+            document.getElementById('menuAchieveBtn'),
+        ].filter(Boolean);
+
+        const allTargets = [...chars, ...otherEls];
+
+        // 给每个元素设置随机散落位置
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // 散落前先停掉所有 CSS 动画，避免覆盖 JS transform
+        chars.forEach(ch => {
+            ch.classList.remove('gold-fill', 'gold-groove');
+            ch.classList.add('gold-final');
+        });
+        allTargets.forEach(el => {
+            el.style.transition = 'none';
+            el.style.position = 'relative';
+            const tx = (Math.random() - 0.5) * vw * 0.8;
+            const ty = (Math.random() - 0.5) * vh * 0.6;
+            const rot = (Math.random() - 0.5) * 180;
+            const scale = 0.4 + Math.random() * 0.8;
+            // 用 requestAnimationFrame 确保 transition: none 先生效
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    el.style.transition = 'transform 0.8s cubic-bezier(.17,.67,.29,1.2)';
+                    el.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${scale})`;
+                });
+            });
+        });
+
+        // 播放爆炸音效
+        this._playSound('goldenExplode');
+        this._haptic('win');
+
+        // 添加提示
+        const hint = document.createElement('div');
+        hint.id = 'explosionHint';
+        hint.textContent = '💥 点击屏幕归位';
+        hint.style.cssText = 'position:fixed;bottom:15%;left:50%;transform:translateX(-50%);color:#FFD700;font-size:16px;font-weight:700;z-index:999;animation:golden-hint-pulse 0.8s ease-in-out infinite;text-shadow:0 0 12px rgba(255,215,0,0.5);';
+        document.body.appendChild(hint);
+
+        // 点击归位
+        const restoreHandler = () => {
+            document.removeEventListener('click', restoreHandler);
+            document.removeEventListener('touchend', restoreHandler);
+            hint.remove();
+
+            // 逐个归位，有错开延迟
+            allTargets.forEach((el, i) => {
+                setTimeout(() => {
+                    el.style.transition = 'transform 0.6s cubic-bezier(.17,.67,.38,.97)';
+                    el.style.transform = '';
+                }, i * 40);
+            });
+
+            // 归位后清理 inline style
+            setTimeout(() => {
+                allTargets.forEach(el => {
+                    el.style.transition = '';
+                    el.style.position = '';
+                    el.style.transform = '';
+                });
+                // 标记已播放
+                try { localStorage.setItem('scanboom_explosionSeen', '1'); } catch {}
+                // 归位后启动律动
+                chars.forEach(ch => ch.classList.add('gold-groove'));
+            }, allTargets.length * 40 + 700);
+        };
+
+        // 延迟一点再允许点击，避免误触
+        setTimeout(() => {
+            document.addEventListener('click', restoreHandler, { once: true });
+            document.addEventListener('touchend', restoreHandler, { once: true });
+        }, 1000);
     }
 
     _menuContinue() {
@@ -730,6 +915,7 @@ class Game {
         this.combo = save.combo || 0;
         this.courageCnt = save.courageCnt || 0;
         this.runNoDmgCount = 0;
+        this.runNoDeath = true;
         this.runAllIn = true;
         this.runNoFlag = true;
         this.runChill = true;
@@ -773,9 +959,11 @@ class Game {
             this.combo = 0;
             this.courageCnt = 0;
             this.runNoDmgCount = 0;
+            this.runNoDeath = true;
             this.runAllIn = true;
             this.runNoFlag = true;
             this.runChill = true;
+
             this._showModifierSelection();
         }, 600);
     }
@@ -1384,11 +1572,14 @@ class Game {
         // 金雷点击区域
         const mine = this.el.goldenMine;
         mine.classList.remove('exploding');
+        mine.style.transform = ''; // 重置缩放
+        mine.style.animation = 'none'; // 停止呼吸，JS 接管缩放
 
         let remaining = 8.0;
         this.goldenMineClicks = 0;
+        let currentScale = 1;
 
-        // 点击金雷
+        // 点击屏幕任意位置（整个 overlay）
         const clickHandler = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1399,6 +1590,10 @@ class Game {
             this.el.goldenCombo.textContent = this.goldenMineClicks;
             this.el.goldenScore.textContent = `+${this.goldenMineClicks * 1000}`;
             this._uiScore();
+
+            // 每次点击放大 2%
+            currentScale += 0.02;
+            mine.style.transform = `scale(${currentScale})`;
 
             // 视觉反馈：缩放脉冲
             mine.classList.remove('pulse');
@@ -1426,8 +1621,9 @@ class Game {
             span.addEventListener('animationend', () => span.remove());
         };
 
-        mine.addEventListener('click', clickHandler);
-        mine.addEventListener('touchend', clickHandler);
+        // 绑定到整个 overlay 而非仅金雷元素
+        overlay.addEventListener('click', clickHandler);
+        overlay.addEventListener('touchend', clickHandler);
 
         // 8 秒倒计时
         const interval = 50; // 50ms 精度
@@ -1439,8 +1635,8 @@ class Game {
             if (remaining <= 0) {
                 clearInterval(this.goldenMineTimer);
                 this.goldenMineTimer = null;
-                mine.removeEventListener('click', clickHandler);
-                mine.removeEventListener('touchend', clickHandler);
+                overlay.removeEventListener('click', clickHandler);
+                overlay.removeEventListener('touchend', clickHandler);
                 this._goldenExplode();
             }
         }, interval);
@@ -1471,6 +1667,8 @@ class Game {
         // 2 秒后关闭叠层，恢复游戏
         setTimeout(() => {
             this.el.goldenOverlay.classList.remove('active');
+            this.el.goldenMine.style.transform = ''; // 重置缩放
+            this.el.goldenMine.style.animation = ''; // 恢复呼吸动画
             this.goldenMineActive = false;
 
             // 标记一生一次（等关卡结束后写入）
@@ -1712,9 +1910,13 @@ class Game {
         this.renderer.goldenBoardGlow = false;
         this.renderer.goldenMinePos = null;
 
-        // === 成就统计更新 ===
         if (isWin) {
             this.stats.levelClears = (this.stats.levelClears || 0) + 1;
+
+            // 历史最高分：每关胜利时更新
+            if (this.totalScore > (this.stats.bestRunScore || 0)) {
+                this.stats.bestRunScore = this.totalScore;
+            }
 
             // 无伤通关计数（踩雷即断链）
             if (this.hitMines === 0) {
@@ -1726,10 +1928,9 @@ class Game {
                 this.stats.bestRunNoDmg = this.runNoDmgCount;
             }
 
-            // 闪电手：L8+ 实际用时 ≤ 30% 基础时间
-            const timeSpent = this.maxTime - this.time;
-            if (this.level >= 8 && timeSpent <= this.maxTime * 0.3) {
-                this.stats.fastWins = (this.stats.fastWins || 0) + 1;
+            // 闪电手：争分夺秒模式下通关累计
+            if (this.activeMods.has('rush')) {
+                this.stats.rushWins = (this.stats.rushWins || 0) + 1;
             }
 
             // 九死一生：1命 + 剩余≤3s
@@ -1737,18 +1938,28 @@ class Game {
                 this.stats.clutchWins = (this.stats.clutchWins || 0) + 1;
             }
 
-            // 第25关通关 → 一周目完成
-            if (this.level >= 25) {
-                this.stats.totalClears = (this.stats.totalClears || 0) + 1;
-                // 最高单周目得分
-                if (this.totalScore > (this.stats.bestRunScore || 0)) {
-                    this.stats.bestRunScore = this.totalScore;
-                }
-                // 修饰器一周目成就
-                if (this.runAllIn) this.stats.allInClears = (this.stats.allInClears || 0) + 1;
-                if (this.runNoFlag) this.stats.noFlagClears = (this.stats.noFlagClears || 0) + 1;
-                if (this.runChill) this.stats.chillFullClears = (this.stats.chillFullClears || 0) + 1;
+            // 挑战成就：修饰器最远推进（不死亡=未Game Over到达的关卡数）
+            if (this.activeMods.has('allIn')) {
+                const run = this.runNoDeath ? this.level : 0;
+                if (run > (this.stats.allInBestRun || 0)) this.stats.allInBestRun = run;
             }
+            if (this.activeMods.has('noFlag')) {
+                const run = this.runNoDeath ? this.level : 0;
+                if (run > (this.stats.noFlagBestRun || 0)) this.stats.noFlagBestRun = run;
+            }
+            if (this.activeMods.has('chill')) {
+                const run = this.runNoDeath ? this.level : 0;
+                if (run > (this.stats.chillBestRun || 0)) this.stats.chillBestRun = run;
+            }
+
+            // 第21关通关 → 一周目完成
+            if (this.level >= 21) {
+                this.stats.totalClears = (this.stats.totalClears || 0) + 1;
+            }
+        } else {
+            // 游戏失败 → 死亡计数
+            this.stats.totalDeaths = (this.stats.totalDeaths || 0) + 1;
+            this.runNoDeath = false;
         }
         saveStats(this.stats);
 
@@ -1777,7 +1988,7 @@ class Game {
         }
 
         let isNewRecord = false;
-        const reachedLevel = isWin ? Math.min(this.level + 1, 25) : this.level;
+        const reachedLevel = isWin ? Math.min(this.level + 1, 21) : this.level;
         if (reachedLevel > this.records.bestLevel || this.totalScore > this.records.bestScore) {
             this.records.bestLevel = Math.max(this.records.bestLevel, reachedLevel);
             this.records.bestScore = Math.max(this.records.bestScore, this.totalScore);
@@ -1790,7 +2001,7 @@ class Game {
             const sb = this.scoreBreakdown;
 
             if (isWin) {
-                const isFinalLevel = this.level >= 25;
+                const isFinalLevel = this.level >= 21;
                 this.el.title.textContent = isFinalLevel
                     ? '🏆 全部通关！'
                     : `🎉 第${this.level}关 通关！`;
@@ -1907,7 +2118,7 @@ class Game {
 
         // 判断胜负
         const isWin = this.state === 'ended' && this.el.nextBtn && !this.el.nextBtn.classList.contains('hidden');
-        const isFinalWin = this.level >= 25 && isWin;
+        const isFinalWin = this.level >= 21 && isWin;
 
         // 状态大字
         ctx.textAlign = 'center';
@@ -1935,7 +2146,7 @@ class Game {
 
         // 统计行
         const stats = [];
-        stats.push(['到达关卡', `第${Math.min(isWin ? this.level + 1 : this.level, 25)}关`]);
+        stats.push(['到达关卡', `第${Math.min(isWin ? this.level + 1 : this.level, 21)}关`]);
         if (this.courageCnt > 0) stats.push(['勇气时刻', `×${this.courageCnt}`]);
         if (this.hitMines > 0) stats.push(['踩雷次数', String(this.hitMines)]);
         if (this.scoreMult > 1) stats.push(['修饰器倍率', `×${this.scoreMult.toFixed(1)}`]);
@@ -2293,7 +2504,7 @@ class Game {
 
     // ==================== 背景音乐 ====================
     _startBGM() {
-        if (!this.settings.sound) return;
+        if (!this.settings.music) return;
         if (this._bgmNode) return;
         this._initAudio();
         const ctx = this.audioCtx;
@@ -2302,15 +2513,14 @@ class Game {
         // 尝试加载 audio/menu-bgm.mp3
         const audio = new Audio('audio/menu-bgm.mp3');
         audio.loop = true;
-        audio.volume = 0.35;
-        audio.play().then(() => {
-            const src = ctx.createMediaElementSource(audio);
-            const gain = ctx.createGain();
-            gain.gain.value = 0.35;
-            src.connect(gain);
-            gain.connect(ctx.destination);
-            this._bgmNode = { audio, gain };
-        }).catch(() => {});
+        audio.volume = 0.96;
+        const src = ctx.createMediaElementSource(audio);
+        const gain = ctx.createGain();
+        gain.gain.value = 0.96;
+        src.connect(gain);
+        gain.connect(ctx.destination);
+        this._bgmNode = { audio, gain };
+        audio.play().catch(e => console.warn('BGM play failed:', e));
     }
 
     _stopBGM(fade = true) {
@@ -2616,6 +2826,8 @@ class Game {
         if (r) r.checked = true;
         const soundToggle = document.getElementById('soundToggle');
         if (soundToggle) soundToggle.checked = this.settings.sound !== false;
+        const musicToggle = document.getElementById('musicToggle');
+        if (musicToggle) musicToggle.checked = this.settings.music !== false;
         const vibrationToggle = document.getElementById('vibrationToggle');
         if (vibrationToggle) vibrationToggle.checked = this.settings.vibration !== false;
     }
