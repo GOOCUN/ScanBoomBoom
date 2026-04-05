@@ -4,8 +4,8 @@
 // + 速推时间奖励 + 暂停 + 勇气奖励
 // ============================================
 
-const APP_VERSION = '2.5.0';
-const APP_BUILD   = '20260404';
+const APP_VERSION = '2.5.1';
+const APP_BUILD   = '20260405';
 const MASTER_GAIN_BOOST = 1.25;
 
 // ==================== 关卡配置（21关） ====================
@@ -369,6 +369,24 @@ class Game {
         this.audioCtx = null;
         this._firstLaunch = true;
         this._bgmNode = null;
+        this._bgmWasPlaying = false;
+
+        // App 前后台切换：暂停/恢复 BGM
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                if (this._bgmNode && !this._bgmNode.audio.paused) {
+                    this._bgmWasPlaying = true;
+                    this._bgmNode.audio.pause();
+                } else {
+                    this._bgmWasPlaying = false;
+                }
+            } else {
+                if (this._bgmWasPlaying && this._bgmNode && this.settings.music) {
+                    this._bgmNode.audio.play().catch(() => {});
+                }
+                this._bgmWasPlaying = false;
+            }
+        });
 
         // 版本号显示
         const verEl = document.getElementById('settingsVersion');
